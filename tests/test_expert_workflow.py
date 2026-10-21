@@ -19,3 +19,11 @@ def test_workflow_combines_retrieval_search_and_reasoning_without_network(tmp_pa
     assert result["research_only"] is True
     assert result["retrieved_web_sources"] == ["https://example.org/study"]
     assert result["action"] == "NO_TRADE"
+
+def test_workflow_invalid_model_json_abstains(tmp_path: Path):
+    index = KnowledgeIndex(tmp_path / "index.sqlite3")
+    workflow = ExpertWorkflow(get_expert("risk_auditor"), index, tmp_path / "memory.jsonl",
+        lambda query, limit: [], lambda system, user: "not json")
+    result = workflow.research("assess evidence")
+    assert result["action"] == "NO_TRADE"
+    assert result["confidence"] == 0.0
