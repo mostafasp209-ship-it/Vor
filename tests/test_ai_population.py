@@ -16,7 +16,7 @@ def test_builds_5000_unique_trainable_ai_configs():
     assert len({a["id"] for a in agents}) == 5000
     assert len({(a["feature_group"], a["horizon"], a["regularization"], a["threshold"])
                 for a in agents}) == 5000
-    assert all(a["model_type"] == "ridge_return_predictor" for a in agents)
+    assert {a["model_type"] for a in agents} == {"ridge", "elastic_net", "sgd", "extra_trees", "hist_gradient_boosting"}
 
 def test_ai_population_trains_and_reports_holdout():
     result = evaluate_ai_population(frame(), size=20, report_top=5)
