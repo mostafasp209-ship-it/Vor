@@ -82,6 +82,31 @@ def _fit_ridge(x: np.ndarray, y: np.ndarray, regularization: float) -> tuple[np.
     weights = np.linalg.solve(gram + regularization * np.eye(gram.shape[0]), z.T @ centered_y)
     return means, scales, np.append(weights, target_mean)
 
+def _fit_agent_predict(agent: dict[str, Any], x: np.ndarray, y: np.ndarray,
+                      x_all: np.ndarray) -> np.ndarray:
+    """Fit one of five compact model families and predict all candles."""
+    model_type = agent["model_type"]
+    alpha = float(agent["regularization"])
+    seed = int(agent["feature_group"] * 1000 + agent["horizon"])
+    if model_type == "ridge":
+        means, scales, params = _fit_ridge(x, y, alpha)
+        return ((x_all - means) / scales) @ params[:-1] + params[-1]
+    if model_type == "elastic_net":
+        model = make_pipeline(StandardScaler(), ElasticNet(
+            alpha=max(alpha, 1e-5), l1_ratio=0.15, max_iter=300, tol=1e-3))
+    elif model_type == "sgd":
+        model = make_pipeline(StandardScaler(), SGDRegressor(
+            alpha=max(alpha, 1e-6), max_iter=150, tol=1e-3, random_state=seed))
+    elif model_type == "extra_trees":
+        model = ExtraTreesRegressor(n_estimators=8, max_depth=4, min_samples_leaf=5,
+                                    n_jobs=1, random_state=seed)
+    else:
+        model = HistGradientBoostingRegressor(max_iter=25, max_leaf_nodes=7,
+            l2_regularization=alpha, learning_rate=0.08, random_state=seed)
+    model.fit(x, y)
+    return model.predict(x_all)
+
+
 def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
                            train_fraction: float = 0.7, fee_bps: float = 10.0,
                            slippage_bps: float = 5.0, report_top: int = 20) -> dict[str, Any]:
@@ -110,11 +135,9 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
         y = target.iloc[:split].loc[train_mask].to_numpy(dtype=float)
         if len(y) < 30:
             continue
-        means, scales, params = _fit_ridge(x, y, agent["regularization"])
-        weights, intercept = params[:-1], params[-1]
         usable = features[cols].notna().all(axis=1).to_numpy()
         x_all = features[cols].fillna(0.0).to_numpy(dtype=float)
-        pred = ((x_all - means) / scales) @ weights + intercept
+        pred = _fit_agent_predict(agent, x, y, x_all)
         # Position uses only the model's prediction; apply it one candle later.
         position = np.where(pred > agent["threshold"] / 100.0, 1.0,
                    np.where(pred < -agent["threshold"] / 100.0, -1.0, 0.0))
@@ -144,8 +167,9 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
     selected = candidates[:min(report_top, len(candidates))]
     return {"candles": len(data), "train_candles": split, "holdout_candles": len(data)-split,
         "population_size": size, "trained_agents": len(candidates),
-        "unique_model_configurations": len({(a["feature_group"], a["horizon"], a["regularization"], a["threshold"]) for a in build_ai_population(size)}),
+        "unique_model_configurations": len({(a["model_type"], a["feature_group"], a["horizon"], a["regularization"], a["threshold"]) for a in build_ai_population(size)}),
         "selected_by": "training Sharpe then training return",
         "cost_assumptions_bps": {"fee": fee_bps, "slippage": slippage_bps},
         "top_agents": selected,
-        "warning": "Agents are independently fitted ridge-regression ML configurations, not independent LLMs. Historical holdout performance does not guarantee future returns."}
+        "model_families": list(MODEL_TYPES),
+        "warning": "Agents are independently fitted ML models across five algorithm families, not independent LLMs. Historical holdout performance does not guarantee future returns."}
