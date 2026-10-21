@@ -122,6 +122,9 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
         raise ValueError("At least 150 candles are required for AI population evaluation")
     features = make_features(data)
     split = int(len(data) * train_fraction)
+    fit_end = int(split * 0.8)
+    if fit_end < 60 or split - fit_end < 20 or len(data) - split < 20:
+        raise ValueError("Need at least 60 fit, 20 validation, and 20 holdout candles")
     costs = (fee_bps + slippage_bps) / 10000.0
     close = data["close"].to_numpy(dtype=float)
     agents = build_ai_population(size)
@@ -131,7 +134,8 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
         horizon = agent["horizon"]
         target = pd.Series(close, index=data.index).shift(-horizon) / pd.Series(close, index=data.index) - 1
         cols = list(agent["features"])
-        train_end = max(0, split - horizon)
+        # Purge labels at the fit boundary so targets cannot reach validation.
+        train_end = max(0, fit_end - horizon)
         train_mask = features.iloc[:train_end][cols].notna().all(axis=1) & target.iloc[:train_end].notna()
         x = features.iloc[:train_end].loc[train_mask, cols].to_numpy(dtype=float)
         y = target.iloc[:train_end].loc[train_mask].to_numpy(dtype=float)
@@ -155,26 +159,32 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
             return {"return": float(equity[-1] - 1),
                     "sharpe": float(np.mean(values) / std * math.sqrt(8760)) if std > 0 else 0.0,
                     "max_drawdown": float(np.min(equity / np.maximum.accumulate(equity) - 1))}
-        train_m, test_m = metrics(net[:split]), metrics(net[split:])
+        train_m = metrics(net[:fit_end])
+        validation_m = metrics(net[fit_end:split])
+        holdout_m = metrics(net[split:])
         return {"id": agent["id"], "model_type": agent["model_type"],
             "feature_group": agent["feature_group"], "features": cols, "horizon": horizon,
             "regularization": agent["regularization"], "threshold": agent["threshold"],
             "train_return": train_m["return"], "train_sharpe": train_m["sharpe"],
             "train_max_drawdown": train_m["max_drawdown"],
-            "holdout_return": test_m["return"], "holdout_sharpe": test_m["sharpe"],
-            "holdout_max_drawdown": test_m["max_drawdown"], "trained_samples": int(len(y))}
+            "validation_return": validation_m["return"], "validation_sharpe": validation_m["sharpe"],
+            "validation_max_drawdown": validation_m["max_drawdown"],
+            "holdout_return": holdout_m["return"], "holdout_sharpe": holdout_m["sharpe"],
+            "holdout_max_drawdown": holdout_m["max_drawdown"], "trained_samples": int(len(y))}
 
     # Independent fits run concurrently; cap BLAS threads to avoid oversubscription.
     with threadpool_limits(limits=1):
         results = Parallel(n_jobs=-1, prefer="threads")(
             delayed(evaluate_agent)(agent) for agent in agents)
     candidates = [candidate for candidate in results if candidate is not None]
-    candidates.sort(key=lambda a: (a["train_sharpe"], a["train_return"]), reverse=True)
+    # Rank on validation only; never select using the final holdout.
+    candidates.sort(key=lambda a: (a["validation_sharpe"], a["validation_return"]), reverse=True)
     selected = candidates[:min(report_top, len(candidates))]
-    return {"candles": len(data), "train_candles": split, "holdout_candles": len(data)-split,
+    return {"candles": len(data), "fit_candles": fit_end, "train_candles": fit_end,
+        "validation_candles": split-fit_end, "holdout_candles": len(data)-split,
         "population_size": size, "trained_agents": len(candidates),
         "unique_model_configurations": len({(a["model_type"], a["feature_group"], a["horizon"], a["regularization"], a["threshold"]) for a in build_ai_population(size)}),
-        "selected_by": "training Sharpe then training return",
+        "selected_by": "validation Sharpe then validation return; holdout excluded from selection",
         "cost_assumptions_bps": {"fee": fee_bps, "slippage": slippage_bps},
         "top_agents": selected,
         "model_families": list(MODEL_TYPES),
