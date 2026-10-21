@@ -81,3 +81,36 @@ def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
     if not results and errors:
         raise ProviderError("All search providers failed: " + ", ".join(errors))
     return results[:limit]
+
+
+def google_search(query: str, limit: int = 5) -> list[SearchResult]:
+    """Search Google via Programmable Search Engine JSON API.
+
+    Requires GOOGLE_API_KEY and GOOGLE_CSE_ID. The CSE must be configured to
+    search the intended web scope. This is not unrestricted Google crawling.
+    """
+    key = os.getenv("GOOGLE_API_KEY")
+    engine_id = os.getenv("GOOGLE_CSE_ID")
+    if not key or not engine_id:
+        raise ProviderError("Set GOOGLE_API_KEY and GOOGLE_CSE_ID to enable Google search.")
+    if not query.strip():
+        return []
+    if not 1 <= limit <= 10:
+        raise ValueError("Google Custom Search JSON API allows at most 10 results per request")
+    params = {"key": key, "cx": engine_id, "q": query, "num": limit}
+    url = "https://www.googleapis.com/customsearch/v1?" + urlencode(params)
+    req = Request(url, headers={"Accept": "application/json", "User-Agent": "Vor-Research/0.1"})
+    try:
+        with urlopen(req, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        raise ProviderError(f"Google search request failed: {type(exc).__name__}") from exc
+    return [
+        SearchResult(
+            title=item.get("title", ""),
+            url=item.get("link", ""),
+            snippet=item.get("snippet", ""),
+            source_date=item.get("pagemap", {}).get("metatags", [{}])[0].get("article:published_time", ""),
+        )
+        for item in payload.get("items", [])[:limit]
+    ]
