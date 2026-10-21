@@ -59,3 +59,21 @@ def test_empty_question_is_rejected_before_search(tmp_path: Path):
     import pytest
     with pytest.raises(ValueError, match="question must not be empty"):
         workflow.research("  ")
+
+
+
+def test_directional_opinion_is_suppressed_without_any_retrieved_sources(tmp_path: Path):
+    index = KnowledgeIndex(tmp_path / "index.sqlite3")
+    workflow = ExpertWorkflow(
+        get_expert("trend_momentum"), index, tmp_path / "memory.jsonl",
+        lambda query, limit: [],
+        lambda system, user: (
+            '{"action":"LONG","summary":"Unsupported claim","evidence":[],'
+            '"counter_evidence":[],"assumptions":[],"invalidation":[],"confidence":0.9,'
+            '"source_refs":[],"limitations":[]}'
+        ),
+    )
+    result = workflow.research("momentum trend")
+    assert result["action"] == "NO_TRADE"
+    assert result["confidence"] == 0.0
+    assert any("suppressed because no local or web sources" in item for item in result["limitations"])
