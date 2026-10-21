@@ -36,14 +36,14 @@ Initial project scaffold. No profitable edge has been established; all strategie
 Install the base dependencies and the optional public-market data connector:
 
 ```bash
-pip install pandas ccxt
+pip install -e '.[dev,market-data]'
 ```
 
 From the repository root, load public hourly BTC/USDT candles and evaluate the current EMA/RSI baseline:
 
 ```python
-from src.crypto_quant.market_data import fetch_public_ohlcv
-from src.crypto_quant.backtest import run_backtest
+from crypto_quant.market_data import fetch_public_ohlcv
+from crypto_quant.backtest import run_backtest
 
 candles = fetch_public_ohlcv(
     exchange_id="binance",
