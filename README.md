@@ -29,3 +29,32 @@ A research-first framework for cryptocurrency market analysis and signal evaluat
 ## Status
 
 Initial project scaffold. No profitable edge has been established; all strategies require independent validation. This software is for research and is not financial advice.
+
+
+## Running the baseline backtest
+
+Install the base dependencies and the optional public-market data connector:
+
+```bash
+pip install pandas ccxt
+```
+
+From the repository root, load public hourly BTC/USDT candles and evaluate the current EMA/RSI baseline:
+
+```python
+from src.crypto_quant.market_data import fetch_public_ohlcv
+from src.crypto_quant.backtest import run_backtest
+
+candles = fetch_public_ohlcv(
+    exchange_id="binance",
+    symbol="BTC/USDT",
+    timeframe="1h",
+    limit=500,
+)
+result = run_backtest(candles, fee_bps=10, slippage_bps=5)
+for key in ("candles", "total_return", "max_drawdown", "sharpe_annualized",
+            "win_rate", "total_cost", "trades_or_rebalances"):
+    print(f"{key}: {result[key]}")
+```
+
+The backtester only uses candles available at each signal timestamp and applies that signal to the following close-to-close return. Returns are historical simulation results, not a forecast. This first version does not model funding, dynamic spreads, market impact, or live execution, and has not yet been run against live-fetched data in this environment.
