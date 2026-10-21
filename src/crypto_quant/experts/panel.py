@@ -67,7 +67,10 @@ class PanelCoordinator:
                 failures.append({"specialist_id": profile.agent_id, "error_type": type(exc).__name__})
         # One bounded peer-review round: each specialist critiques the other opinions.
         peer_reviews = []
-        for profile, own_opinion in zip(profiles, opinions):
+        for profile in profiles:
+            own_opinion = next((item for item in opinions if item.get("specialist_id") == profile.agent_id), None)
+            if own_opinion is None:
+                continue
             peers = [item for item in opinions if item.get("specialist_id") != profile.agent_id]
             if not peers:
                 continue
