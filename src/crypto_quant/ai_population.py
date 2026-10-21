@@ -124,29 +124,29 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
     split = int(len(data) * train_fraction)
     costs = (fee_bps + slippage_bps) / 10000.0
     close = data["close"].to_numpy(dtype=float)
-    candidates = []
-    for agent in build_ai_population(size):
+    agents = build_ai_population(size)
+    bar_returns = pd.Series(close, index=data.index).pct_change().fillna(0.0).to_numpy()
+
+    def evaluate_agent(agent: dict[str, Any]) -> dict[str, Any] | None:
         horizon = agent["horizon"]
         target = pd.Series(close, index=data.index).shift(-horizon) / pd.Series(close, index=data.index) - 1
         cols = list(agent["features"])
-        train_mask = (features.iloc[:split][cols].notna().all(axis=1) &
-                      target.iloc[:split].notna())
-        x = features.iloc[:split].loc[train_mask, cols].to_numpy(dtype=float)
-        y = target.iloc[:split].loc[train_mask].to_numpy(dtype=float)
+        train_end = max(0, split - horizon)
+        train_mask = features.iloc[:train_end][cols].notna().all(axis=1) & target.iloc[:train_end].notna()
+        x = features.iloc[:train_end].loc[train_mask, cols].to_numpy(dtype=float)
+        y = target.iloc[:train_end].loc[train_mask].to_numpy(dtype=float)
         if len(y) < 30:
-            continue
+            return None
         usable = features[cols].notna().all(axis=1).to_numpy()
         x_all = features[cols].fillna(0.0).to_numpy(dtype=float)
         pred = _fit_agent_predict(agent, x, y, x_all)
-        # Position uses only the model's prediction; apply it one candle later.
         position = np.where(pred > agent["threshold"] / 100.0, 1.0,
                    np.where(pred < -agent["threshold"] / 100.0, -1.0, 0.0))
         position[~usable] = 0.0
         position = pd.Series(position, index=data.index).shift(1).fillna(0.0).to_numpy()
-        bar_returns = pd.Series(close, index=data.index).pct_change().fillna(0.0).to_numpy()
         turnover = np.abs(np.diff(np.r_[0.0, position]))
         net = position * bar_returns - turnover * costs
-        train_net, test_net = net[:split], net[split:]
+
         def metrics(values: np.ndarray) -> dict[str, float]:
             if not len(values):
                 return {"return": 0.0, "sharpe": 0.0, "max_drawdown": 0.0}
@@ -155,14 +155,20 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
             return {"return": float(equity[-1] - 1),
                     "sharpe": float(np.mean(values) / std * math.sqrt(8760)) if std > 0 else 0.0,
                     "max_drawdown": float(np.min(equity / np.maximum.accumulate(equity) - 1))}
-        train_m, test_m = metrics(train_net), metrics(test_net)
-        candidates.append({"id": agent["id"], "model_type": agent["model_type"],
+        train_m, test_m = metrics(net[:split]), metrics(net[split:])
+        return {"id": agent["id"], "model_type": agent["model_type"],
             "feature_group": agent["feature_group"], "features": cols, "horizon": horizon,
             "regularization": agent["regularization"], "threshold": agent["threshold"],
             "train_return": train_m["return"], "train_sharpe": train_m["sharpe"],
             "train_max_drawdown": train_m["max_drawdown"],
             "holdout_return": test_m["return"], "holdout_sharpe": test_m["sharpe"],
-            "holdout_max_drawdown": test_m["max_drawdown"], "trained_samples": int(len(y))})
+            "holdout_max_drawdown": test_m["max_drawdown"], "trained_samples": int(len(y))}
+
+    # Independent fits run concurrently; cap BLAS threads to avoid oversubscription.
+    with threadpool_limits(limits=1):
+        results = Parallel(n_jobs=-1, prefer="threads")(
+            delayed(evaluate_agent)(agent) for agent in agents)
+    candidates = [candidate for candidate in results if candidate is not None]
     candidates.sort(key=lambda a: (a["train_sharpe"], a["train_return"]), reverse=True)
     selected = candidates[:min(report_top, len(candidates))]
     return {"candles": len(data), "train_candles": split, "holdout_candles": len(data)-split,
