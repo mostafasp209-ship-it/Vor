@@ -27,6 +27,7 @@ def test_ai_population_trains_and_reports_holdout():
     assert "validation_sharpe" in result["top_agents"][0]
     assert result["selected_by"].startswith("validation Sharpe")
     assert result["fit_candles"] + result["validation_candles"] + result["holdout_candles"] == 220
+    assert set(result["family_summary"]) == {"ridge", "elastic_net", "sgd", "extra_trees", "hist_gradient_boosting"}
     assert result["holdout_candles"] == 66
 
 def test_rejects_too_short_data():
