@@ -3,12 +3,12 @@ import json
 from pathlib import Path
 from .registry import ExpertProfile
 from .research_loop import ResearchAgent
-from .providers import brave_search, openai_compatible_chat
+from .providers import multi_source_search, openai_compatible_chat
 from ..knowledge import KnowledgeIndex
 
 class ExpertWorkflow:
     def __init__(self, profile: ExpertProfile, index: KnowledgeIndex, memory_path: str | Path,
-                 search_provider=brave_search, reasoning_provider=openai_compatible_chat):
+                 search_provider=multi_source_search, reasoning_provider=openai_compatible_chat):
         self.profile, self.index = profile, index
         self.memory_path = Path(memory_path)
         self.search_provider, self.reasoning_provider = search_provider, reasoning_provider
