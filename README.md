@@ -1,0 +1,31 @@
+# Crypto Quant Lab
+
+A research-first framework for cryptocurrency market analysis and signal evaluation. The project combines 50 narrowly scoped specialist modules into a transparent ensemble; it does **not** assume that more agents automatically means better predictions.
+
+## Current scope
+
+- Produce `LONG`, `SHORT`, or `NO_TRADE` candidates with confidence, rationale, invalidation, and risk metadata.
+- Keep specialist outputs separate and auditable before combining them.
+- Validate ideas with walk-forward backtests, fees, slippage, and out-of-sample tests.
+- Default to research and paper trading. Live execution is out of scope until explicit safeguards and tests exist.
+
+## Design principles
+
+1. No look-ahead or survivorship leakage.
+2. Compare every model with simple baselines.
+3. Include fees, spread, funding, slippage, and latency where applicable.
+4. Calibrate confidence; abstain when evidence is weak or specialists disagree.
+5. Cap portfolio risk independently of signal confidence.
+6. Never put API keys, exchange secrets, or account identifiers in source control.
+
+## Initial roadmap
+
+1. Define data contracts and specialist interfaces.
+2. Add data validation and reproducible feature generation.
+3. Implement specialists incrementally, each with tests and a documented hypothesis.
+4. Build a weighted, regime-aware ensemble with a `NO_TRADE` path.
+5. Backtest chronologically and run paper trading before considering live use.
+
+## Status
+
+Initial project scaffold. No profitable edge has been established; all strategies require independent validation. This software is for research and is not financial advice.
