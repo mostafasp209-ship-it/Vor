@@ -106,3 +106,21 @@ for candidate in report["top_candidates"]:
 ```
 
 Candidates are ranked on the first 70% of the chronological series; the final 30% is reported as holdout for the training-selected candidates. This reduces, but does not eliminate, overfitting. The available OHLCV feed cannot substantiate strategies requiring news, order-book, funding, derivatives, or on-chain data; those must not be simulated as if real inputs existed.
+
+## Five-family AI model population
+
+The current public research workflow also trains 5,000 distinct machine-learning configurations across five actual estimator families: Ridge, Elastic Net, SGD Regressor, Extra Trees, and HistGradientBoosting. Each agent is fitted independently with its own feature subset, prediction horizon, regularization and threshold. Agent evaluations run concurrently with BLAS thread limits to avoid uncontrolled nested parallelism.
+
+~~~bash
+pip install -e ".[dev,market-data]"
+python scripts/run_population.py
+~~~
+
+The chronological evaluation is divided into a fit segment (56% with the default settings), a validation segment (14%), and a final holdout (30%). Candidate ranking uses validation Sharpe and validation return; the holdout is reported but not used for ranking. The evaluation includes configured fee and slippage assumptions, but it still does not model all real-market effects such as dynamic spread, funding, market impact, partial fills, latency, or delisted-asset survivorship. Treat every score as research evidence, not a forecast or a guarantee of profit.
+
+Research references informing this design:
+- [scikit-learn model selection and time-series validation](https://scikit-learn.org/stable/model_selection.html)
+- [scikit-learn parallelism and resource management](https://scikit-learn.org/stable/computing/parallelism.html)
+- [Freqtrade backtesting documentation](https://github.com/freqtrade/freqtrade/blob/develop/docs/backtesting.md)
+
+These references are used as design guidance, not copied wholesale into this project. External engines such as Freqtrade or VectorBT should be evaluated separately before adopting them as dependencies; adding a large framework without a tested need can increase maintenance and runtime cost.
