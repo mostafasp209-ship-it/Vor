@@ -24,6 +24,9 @@ def test_ai_population_trains_and_reports_holdout():
     assert result["unique_model_configurations"] == 20
     assert len(result["top_agents"]) == 5
     assert "holdout_return" in result["top_agents"][0]
+    assert "validation_sharpe" in result["top_agents"][0]
+    assert result["selected_by"].startswith("validation Sharpe")
+    assert result["fit_candles"] + result["validation_candles"] + result["holdout_candles"] == 220
     assert result["holdout_candles"] == 66
 
 def test_rejects_too_short_data():
