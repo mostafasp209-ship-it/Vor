@@ -14,7 +14,7 @@ from .market_data import validate_ohlcv
 FEATURES = ("ret_1", "ret_3", "ret_6", "ret_12", "ema_gap_8", "ema_gap_21",
             "rsi_scaled", "vol_12", "range_scaled", "volume_change")
 HORIZONS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 36)
-REGULARIZATIONS = (0.001, 0.01, 0.1, 1.0, 10.0)
+REGULARIZATIONS = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0)
 THRESHOLDS = (0.0, 0.05, 0.1, 0.15, 0.2)
 FEATURE_GROUPS = (
     ("ret_1", "ret_3", "ret_6"),
