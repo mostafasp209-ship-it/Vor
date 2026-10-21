@@ -1,14 +1,16 @@
-name: Public market population research
+name: Legacy quantitative population benchmark (manual only)
 
 on:
-  push:
-    branches: [main]
+  # This job evaluates numeric model configurations, not knowledge-specialist agents.
+  # Keep it manual to avoid consuming free Actions minutes on every code push or daily schedule.
   workflow_dispatch:
-  schedule:
-    - cron: "20 12 * * *"
 
 permissions:
   contents: read
+
+concurrency:
+  group: manual-population-benchmark
+  cancel-in-progress: false
 
 jobs:
   research:
@@ -22,12 +24,12 @@ jobs:
           cache: pip
       - name: Install package and public data connector
         run: python -m pip install -e ".[market-data]"
-      - name: Fetch public candles and train 5,000 AI agents
+      - name: Fetch public candles and evaluate numeric model population
         run: python scripts/run_population.py
       - name: Upload research report
         uses: actions/upload-artifact@v4
         with:
-          name: btc-usd-ai-population-report
+          name: btc-usd-quantitative-population-report
           path: artifacts/btc_usd_ai_population_report.json
           if-no-files-found: error
           retention-days: 30
