@@ -9,7 +9,15 @@ from typing import Any
 import math
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
+from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor
+from sklearn.linear_model import ElasticNet, SGDRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from threadpoolctl import threadpool_limits
 from .market_data import validate_ohlcv
+
+MODEL_TYPES = ("ridge", "elastic_net", "sgd", "extra_trees", "hist_gradient_boosting")
 
 FEATURES = ("ret_1", "ret_3", "ret_6", "ret_12", "ema_gap_8", "ema_gap_21",
             "rsi_scaled", "vol_12", "range_scaled", "volume_change")
@@ -38,7 +46,7 @@ def build_ai_population(size: int = 5000) -> list[dict[str, Any]]:
     for i, (group, horizon, reg, threshold) in enumerate(grid[:size], start=1):
         agents.append({"id": f"ai-agent-{i:05d}", "feature_group": group,
             "features": FEATURE_GROUPS[group], "horizon": horizon, "regularization": reg,
-            "threshold": threshold, "model_type": "ridge_return_predictor",
+            "threshold": threshold, "model_type": MODEL_TYPES[(i - 1) % len(MODEL_TYPES)],
             "status": "trainable_ml_agent"})
     return agents
 
