@@ -7,6 +7,6 @@ __all__ = ["ExpertOpinion", "ResearchAgent", "ResearchNote", "SearchResult", "de
 
 from .workflow import ExpertWorkflow
 from .panel import PanelCoordinator
-from .providers import ProviderError, brave_search, scholarly_search, multi_source_search, openai_compatible_chat
+from .providers import ProviderError, brave_search, google_search, scholarly_search, multi_source_search, openai_compatible_chat
 
-__all__ += ["ExpertWorkflow", "PanelCoordinator", "ProviderError", "brave_search", "scholarly_search", "multi_source_search", "openai_compatible_chat"]
+__all__ += ["ExpertWorkflow", "PanelCoordinator", "ProviderError", "brave_search", "google_search", "scholarly_search", "multi_source_search", "openai_compatible_chat"]
