@@ -77,3 +77,30 @@ def test_directional_opinion_is_suppressed_without_any_retrieved_sources(tmp_pat
     assert result["action"] == "NO_TRADE"
     assert result["confidence"] == 0.0
     assert any("suppressed because no local or web sources" in item for item in result["limitations"])
+
+
+
+def test_prior_specialist_memory_is_passed_to_the_next_run(tmp_path: Path):
+    index = KnowledgeIndex(tmp_path / "index.sqlite3")
+    observed = []
+
+    def search(query, limit):
+        return [SearchResult("Study", "https://example.org/study", "Finding")]
+
+    def reason(system, user):
+        payload = json.loads(user)
+        observed.append(payload["prior_specialist_memory"])
+        return (
+            '{"action":"NO_TRADE","summary":"Research only","evidence":[],'
+            '"counter_evidence":[],"assumptions":[],"invalidation":[],"confidence":0.0,'
+            '"source_refs":[],"limitations":[]}'
+        )
+
+    workflow = ExpertWorkflow(
+        get_expert("trend_momentum"), index, tmp_path / "memory.jsonl", search, reason
+    )
+    workflow.research("first question")
+    workflow.research("second question")
+    assert observed[0] == []
+    assert len(observed[1]) == 1
+    assert observed[1][0]["question"] == "first question"
