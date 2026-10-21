@@ -8,6 +8,29 @@ from .schema import ExpertOpinion
 from ..knowledge import KnowledgeIndex
 from .providers import openai_compatible_chat
 
+def _select_relevant_experts(query: str, max_experts: int):
+    """Simple transparent relevance ranking, with an independent risk reviewer."""
+    profiles = list(default_experts())
+    terms = set(query.lower().replace("-", " ").replace("/", " ").split())
+    scored = []
+    for profile in profiles:
+        corpus = " ".join((profile.agent_id, profile.name, profile.specialty, *profile.search_topics, *profile.source_topics)).lower()
+        tokens = set(corpus.replace("-", " ").replace("/", " ").split())
+        score = len(terms & tokens)
+        scored.append((score, profile))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    chosen = [profile for score, profile in scored if score > 0][:max_experts]
+    risk = next((profile for profile in profiles if profile.agent_id == "risk_auditor"), None)
+    if risk and risk not in chosen:
+        if len(chosen) >= max_experts:
+            chosen[-1] = risk
+        else:
+            chosen.append(risk)
+    if not chosen:
+        chosen = profiles[:max_experts]
+    return chosen[:max_experts]
+
+
 class PanelCoordinator:
     """Runs a bounded set of specialists, then asks a moderator to compare evidence.
 
@@ -24,7 +47,10 @@ class PanelCoordinator:
                 expert_ids: list[str] | None = None, max_experts: int = 6) -> dict:
         if max_experts < 1 or max_experts > 30:
             raise ValueError("max_experts must be between 1 and 30")
-        profiles = [get_expert(agent_id) for agent_id in expert_ids] if expert_ids else list(default_experts())[:max_experts]
+        if expert_ids:
+            profiles = [get_expert(agent_id) for agent_id in expert_ids]
+        else:
+            profiles = _select_relevant_experts(question + " " + market_context, max_experts)
         if len(profiles) > max_experts:
             raise ValueError(f"Selected {len(profiles)} experts, exceeding max_experts={max_experts}")
         self.memory_dir.mkdir(parents=True, exist_ok=True)
