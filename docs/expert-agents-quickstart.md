@@ -2,6 +2,22 @@
 
 The repository has starter implementations for distinct research roles, structured opinions, persistent JSONL memory, optional API adapters, a local SQLite full-text index for permitted Markdown/text sources, and a command-line entry point. This is not yet a finished 5,000-agent service.
 
+## Free local reasoning (no paid API key)
+
+The panel's reasoning adapter now prefers the hosted OpenAI API only when `OPENAI_API_KEY` is set. If it is absent, the adapter uses a local Ollama server with no API key.
+
+1. Install Ollama from https://ollama.com/download.
+2. Start Ollama, then download a model that fits your hardware, for example:
+
+   ```bash
+   ollama pull qwen2.5:7b
+   ```
+
+3. Leave `OPENAI_API_KEY` unset. Optionally set `OLLAMA_MODEL` and `OLLAMA_BASE_URL` (default model `qwen2.5:7b`, default endpoint `http://localhost:11434/v1`).
+4. Run the CLI examples below on the same machine as Ollama.
+
+Local inference does not need a paid API key, but model downloads use disk space and inference uses your own RAM/CPU/GPU and electricity. A 7B model may be slow or fail on hardware with insufficient memory. A GitHub-hosted workflow runner will not automatically have your personal Ollama server; do not expect local reasoning to work in GitHub Actions unless a self-hosted runner is explicitly configured.
+
 ## Local knowledge base
 
 Only ingest documents you have the right to store. The initial index supports .txt and .md, stores source path and SHA-256 content hash, chunks sources, and performs SQLite FTS retrieval. PDF/EPUB extraction, source-license workflows, large-corpus deduplication, and automated book acquisition are not implemented yet.
@@ -13,35 +29,43 @@ Only ingest documents you have the right to store. The initial index supports .t
 
 See source-library-policy.md for source rights and provenance requirements.
 
-## Enable API reasoning and live web search
+## Optional web and scholarly search
 
-Set these environment variables in the deployment environment; never commit API keys:
+- OpenAlex scholarly metadata search is available without a paid key; set `OPENALEX_MAILTO` only if you want to provide contact metadata.
+- Brave web search requires `BRAVE_SEARCH_API_KEY` and provider access/quotas; do not assume it is free without checking the account terms.
+- Google Programmable Search JSON API requires `GOOGLE_API_KEY` and `GOOGLE_CSE_ID`, and is only suitable for eligible existing accounts. It is not unrestricted Google crawling; Google's documentation says it is closed to new customers and existing customers must transition by January 1, 2027. For a new deployment, don't rely on this legacy adapter.
 
-- OPENAI_API_KEY enables OpenAI-compatible chat completion.
-- OPENAI_MODEL optionally selects the model; the default is gpt-4.1-mini.
-- OPENAI_BASE_URL optionally sets an OpenAI-compatible API base URL.
-- BRAVE_SEARCH_API_KEY enables Brave Search web queries.
-- GOOGLE_API_KEY and GOOGLE_CSE_ID enable the legacy Google Custom Search JSON API adapter only for eligible existing accounts; Google's official docs say the API is closed to new customers and existing customers must transition by 2027-01-01. Prefer the general web-search provider for new deployments.
-- OPENALEX_MAILTO is optional contact metadata for scholarly API requests.
+## Enable hosted reasoning (optional, may cost money)
 
-Install the package, set both keys, ingest licensed sources into the local index, then run:
+Set `OPENAI_API_KEY` in the deployment environment to enable OpenAI-hosted reasoning. `OPENAI_MODEL` optionally selects the model; `OPENAI_BASE_URL` optionally changes the compatible endpoint. If this key is set, hosted reasoning takes precedence over local Ollama.
+
+Never commit API keys to Git. Use environment variables or repository secrets.
+
+## Run a specialist or bounded panel
+
+Install the package and its development extras:
+
+    pip install -e ".[dev]"
+
+Run one specialist:
 
     python -m crypto_quant.experts.cli --expert trend_momentum --question "What evidence supports time-series momentum?" --market-context "BTC/USD daily candles"
 
-    # Run a bounded multi-specialist research discussion (default 6 experts)
+Run a bounded multi-specialist discussion (default 6 experts):
+
     python -m crypto_quant.experts.cli --panel --max-experts 6 --question "Compare momentum and mean reversion for BTC" --market-context "Daily data; include fees and slippage"
 
-    # Or explicitly choose the panel
+Or explicitly choose the panel:
+
     python -m crypto_quant.experts.cli --panel --experts trend_momentum,mean_reversion,market_microstructure,risk_auditor --max-experts 4 --question "Compare strategy evidence"
 
-Adapters are optional and make no requests unless explicitly called. API access requires valid credentials, an active account, and applicable provider terms. Search snippets alone are not authoritative evidence; review and cite source pages.
+Adapters are optional and make no requests unless explicitly called. Search snippets alone are not authoritative evidence; review and cite source pages.
 
 ## Scope and remaining work
 
-- The registry currently contains distinct research archetypes, not 5,000 independent deployed experts. The panel can select a bounded subset and preserve disagreement; the default is six experts to control latency and API cost.
-- A Google Programmable Search Engine JSON API adapter exists for legacy/eligible accounts and requires GOOGLE_API_KEY plus GOOGLE_CSE_ID. Important: Google's official documentation currently says this API is closed to new customers and existing customers must transition by January 1, 2027. Do not rely on it for a new deployment; use the general web-search adapter for broad web search, and evaluate Vertex AI Search only when a bounded set of domains is sufficient. See https://developers.google.com/custom-search/v1/overview.
+- The registry currently contains distinct research archetypes, not 5,000 independent deployed experts. The panel can select a bounded subset and preserve disagreement; the default is six experts to control latency and cost.
 - No 15,000-source corpus has been collected or indexed; source discovery returns metadata/snippets unless authorized full text is separately ingested.
-- Live providers are not verified until valid credentials and a successful integration test are supplied.
+- Live provider connections must be tested in the target environment.
 - No automated review-and-acceptance pipeline for learned knowledge exists yet.
 - No trading orders are executed; this is research-only.
 - No profitability claim has been established.
