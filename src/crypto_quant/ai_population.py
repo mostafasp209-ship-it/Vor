@@ -180,6 +180,16 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
     # Rank on validation only; never select using the final holdout.
     candidates.sort(key=lambda a: (a["validation_sharpe"], a["validation_return"]), reverse=True)
     selected = candidates[:min(report_top, len(candidates))]
+    family_summary = {}
+    for family in MODEL_TYPES:
+        group = [candidate for candidate in candidates if candidate["model_type"] == family]
+        if group:
+            family_summary[family] = {
+                "agents": len(group),
+                "median_validation_sharpe": float(np.median([a["validation_sharpe"] for a in group])),
+                "median_holdout_sharpe": float(np.median([a["holdout_sharpe"] for a in group])),
+                "positive_holdout_fraction": float(np.mean([a["holdout_return"] > 0 for a in group])),
+            }
     return {"candles": len(data), "fit_candles": fit_end, "train_candles": fit_end,
         "validation_candles": split-fit_end, "holdout_candles": len(data)-split,
         "population_size": size, "trained_agents": len(candidates),
@@ -188,4 +198,5 @@ def evaluate_ai_population(ohlcv: pd.DataFrame, *, size: int = 5000,
         "cost_assumptions_bps": {"fee": fee_bps, "slippage": slippage_bps},
         "top_agents": selected,
         "model_families": list(MODEL_TYPES),
+        "family_summary": family_summary,
         "warning": "Agents are independently fitted ML models across five algorithm families, not independent LLMs. Historical holdout performance does not guarantee future returns."}
