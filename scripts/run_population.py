@@ -21,7 +21,11 @@ def main() -> None:
     print(f"Report saved: {target}")
     print(f"Trained agents: {report['trained_agents']} / {report['population_size']}")
     print(f"Unique model configurations: {report['unique_model_configurations']}")
-    print(f"Train candles: {report['train_candles']}; holdout candles: {report['holdout_candles']}")
+    print(f"Fit/validation/holdout candles: {report['fit_candles']} / "
+          f"{report['validation_candles']} / {report['holdout_candles']}")
+    print("Model-family summary:")
+    for family, metrics in report["family_summary"].items():
+        print(f"  {family}: {json.dumps(metrics, sort_keys=True)}")
     for candidate in report["top_agents"][:5]:
         print(json.dumps(candidate, sort_keys=True))
 
