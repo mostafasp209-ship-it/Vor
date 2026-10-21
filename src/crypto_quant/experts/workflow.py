@@ -117,8 +117,16 @@ class ExpertWorkflow:
         parsed["question"] = question
         parsed["market_context"] = market_context
         parsed["research_only"] = True
+
+        limitations = parsed.get("limitations", [])
+        if not isinstance(limitations, list):
+            limitations = [str(limitations)] if limitations else []
         if not local:
-            parsed.setdefault("limitations", []).append(
-                "No matching local knowledge chunks were retrieved for this specialist."
-            )
+            limitations.append("No matching local knowledge chunks were retrieved for this specialist.")
+        if not local and not note.source_refs and parsed["action"] != "NO_TRADE":
+            # With no retrieved evidence at all, a directional answer is not auditable.
+            parsed["action"] = "NO_TRADE"
+            parsed["confidence"] = 0.0
+            limitations.append("Directional opinion suppressed because no local or web sources were retrieved.")
+        parsed["limitations"] = limitations
         return parsed
