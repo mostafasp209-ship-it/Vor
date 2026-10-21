@@ -1,15 +1,19 @@
 """Optional live search and OpenAI-compatible reasoning adapters.
 Credentials are read from environment variables; imports never make network calls.
+If OPENAI_API_KEY is absent, reasoning falls back to a local Ollama server without a key.
 """
 import json
 import os
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+
 from .research_loop import SearchResult
+
 
 class ProviderError(RuntimeError):
     pass
+
 
 def brave_search(query: str, limit: int = 5) -> list[SearchResult]:
     """Search the web through Brave Search API; requires BRAVE_SEARCH_API_KEY."""
@@ -19,28 +23,64 @@ def brave_search(query: str, limit: int = 5) -> list[SearchResult]:
     if not 1 <= limit <= 20:
         raise ValueError("limit must be between 1 and 20")
     url = "https://api.search.brave.com/res/v1/web/search?" + urlencode({"q": query, "count": limit})
-    req = Request(url, headers={"Accept": "application/json", "X-Subscription-Token": key, "User-Agent": "Vor-Research/0.1"})
+    req = Request(url, headers={
+        "Accept": "application/json", "X-Subscription-Token": key,
+        "User-Agent": "Vor-Research/0.1",
+    })
     try:
         with urlopen(req, timeout=15) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
         raise ProviderError(f"Search request failed: {type(exc).__name__}") from exc
-    return [SearchResult(title=item.get("title", ""), url=item.get("url", ""), snippet=item.get("description", ""), source_date=item.get("page_age", "") or "") for item in payload.get("web", {}).get("results", [])[:limit]]
+    return [
+        SearchResult(
+            title=item.get("title", ""), url=item.get("url", ""),
+            snippet=item.get("description", ""),
+            source_date=item.get("page_age", "") or "",
+        )
+        for item in payload.get("web", {}).get("results", [])[:limit]
+    ]
+
 
 def openai_compatible_chat(system_prompt: str, user_prompt: str) -> str:
-    """Call an OpenAI-compatible chat endpoint using OPENAI_API_KEY."""
+    """Use OpenAI API when keyed; otherwise use local Ollama with no API key.
+
+    Local mode requires Ollama running at OLLAMA_BASE_URL (default
+    http://localhost:11434/v1) and a downloaded model (default qwen2.5:7b).
+    """
     key = os.getenv("OPENAI_API_KEY")
-    if not key:
-        raise ProviderError("Set OPENAI_API_KEY to enable API reasoning.")
-    base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    body = json.dumps({"model": model, "temperature": 0.2, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]}).encode("utf-8")
-    req = Request(base + "/chat/completions", data=body, method="POST", headers={"Authorization": "Bearer " + key, "Content-Type": "application/json", "Accept": "application/json"})
+    if key:
+        base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+        headers = {"Authorization": "Bearer " + key}
+        timeout = 60
+    else:
+        base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").rstrip("/")
+        model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+        headers = {}
+        timeout = 120
+
+    body = json.dumps({
+        "model": model,
+        "temperature": 0.2,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }).encode("utf-8")
+    headers.update({"Content-Type": "application/json", "Accept": "application/json"})
+    req = Request(base + "/chat/completions", data=body, method="POST", headers=headers)
     try:
-        with urlopen(req, timeout=60) as response:
+        with urlopen(req, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
         return payload["choices"][0]["message"]["content"]
     except (HTTPError, URLError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+        if not key:
+            raise ProviderError(
+                "Local Ollama reasoning failed. Install/start Ollama and run "
+                f"'ollama pull {model}', or configure OPENAI_API_KEY for a hosted provider. "
+                f"Cause: {type(exc).__name__}"
+            ) from exc
         raise ProviderError(f"Reasoning API request failed: {type(exc).__name__}") from exc
 
 
@@ -57,23 +97,30 @@ def scholarly_search(query: str, limit: int = 5) -> list[SearchResult]:
     for item in records:
         url = item.get("landing_page_url") or item.get("doi") or item.get("work_id") or ""
         title = item.get("title") or "Untitled scholarly work"
-        details = [str(item.get("year") or ""), str(item.get("venue") or ""), "citations=" + str(item.get("cited_by_count") or 0)]
+        details = [
+            str(item.get("year") or ""), str(item.get("venue") or ""),
+            "citations=" + str(item.get("cited_by_count") or 0),
+        ]
         if item.get("is_open_access"):
             details.append("open-access copy reported by index; verify license")
-        output.append(SearchResult(title=title, url=url, snippet="; ".join(x for x in details if x), source_date=str(item.get("year") or "")))
+        output.append(SearchResult(
+            title=title, url=url, snippet="; ".join(x for x in details if x),
+            source_date=str(item.get("year") or ""),
+        ))
     return output
 
 
 def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
-    """Combine scholarly discovery and general web results, deduplicated by URL.
+    """Combine scholarly discovery and optional general web results, deduplicated by URL.
 
-    Missing Brave credentials do not disable the public OpenAlex metadata search.
+    Missing Brave/Google credentials do not disable public OpenAlex metadata search.
     """
     results: list[SearchResult] = []
     errors = []
     for provider in (scholarly_search, brave_search, google_search):
         try:
-            for item in provider(query, min(limit, 10) if provider is google_search else limit):
+            provider_limit = min(limit, 10) if provider is google_search else limit
+            for item in provider(query, provider_limit):
                 if item.url and item.url not in {existing.url for existing in results}:
                     results.append(item)
         except Exception as exc:
@@ -84,10 +131,9 @@ def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
 
 
 def google_search(query: str, limit: int = 5) -> list[SearchResult]:
-    """Search Google via Programmable Search Engine JSON API.
+    """Search Google via Programmable Search Engine JSON API (eligible accounts only).
 
-    Requires GOOGLE_API_KEY and GOOGLE_CSE_ID. The CSE must be configured to
-    search the intended web scope. This is not unrestricted Google crawling.
+    Requires GOOGLE_API_KEY and GOOGLE_CSE_ID. This is not unrestricted Google crawling.
     """
     key = os.getenv("GOOGLE_API_KEY")
     engine_id = os.getenv("GOOGLE_CSE_ID")
@@ -107,10 +153,11 @@ def google_search(query: str, limit: int = 5) -> list[SearchResult]:
         raise ProviderError(f"Google search request failed: {type(exc).__name__}") from exc
     return [
         SearchResult(
-            title=item.get("title", ""),
-            url=item.get("link", ""),
+            title=item.get("title", ""), url=item.get("link", ""),
             snippet=item.get("snippet", ""),
-            source_date=item.get("pagemap", {}).get("metatags", [{}])[0].get("article:published_time", ""),
+            source_date=item.get("pagemap", {}).get("metatags", [{}])[0].get(
+                "article:published_time", ""
+            ),
         )
         for item in payload.get("items", [])[:limit]
     ]
