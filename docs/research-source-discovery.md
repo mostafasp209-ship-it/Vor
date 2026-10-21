@@ -28,7 +28,7 @@ This catalog is the initial verified shortlist, not an exhaustive country-by-cou
 
 ## Google web search integration
 
-The expert workflow can use Google's Programmable Search Engine JSON API as an additional provider when both `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` are configured. Create/configure a Programmable Search Engine for the intended scope and enable the Custom Search JSON API in Google Cloud. This API is quota- and billing/eligibility-dependent; it is not an unrestricted crawler of every Google result or every country's entire web. The adapter asks for at most 10 results per request, stores result URLs/snippets as research references, and should be combined with scholarly discovery and specialist-specific source routing.
+The code includes an adapter for Google's Programmable Search Engine JSON API, requiring `GOOGLE_API_KEY` and `GOOGLE_CSE_ID`. However, Google's current official documentation says the Custom Search JSON API is closed to new customers and existing customers must transition by January 1, 2027. Thus, this adapter is only practical for eligible existing accounts during the transition; do not assume it is available for a new deployment. It is not an unrestricted crawler of every Google result. The general web-search adapter is the practical broad-search fallback; Vertex AI Search is worth evaluating for a configured set of domains, not as a drop-in full-web Google search replacement.
 
 Official setup references:
 - Programmable Search Engine: https://programmablesearchengine.google.com/
