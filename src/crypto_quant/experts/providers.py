@@ -42,3 +42,42 @@ def openai_compatible_chat(system_prompt: str, user_prompt: str) -> str:
         return payload["choices"][0]["message"]["content"]
     except (HTTPError, URLError, TimeoutError, ValueError, KeyError, IndexError) as exc:
         raise ProviderError(f"Reasoning API request failed: {type(exc).__name__}") from exc
+
+
+def scholarly_search(query: str, limit: int = 5) -> list[SearchResult]:
+    """Discover scholarly works through OpenAlex; results are metadata, not full-text claims."""
+    from ..knowledge.source_catalog import search_openalex
+    if not 1 <= limit <= 20:
+        raise ValueError("limit must be between 1 and 20")
+    try:
+        records = search_openalex(query, limit=min(limit, 20), mailto=os.getenv("OPENALEX_MAILTO"))
+    except Exception as exc:
+        raise ProviderError(f"Scholarly search failed: {type(exc).__name__}") from exc
+    output = []
+    for item in records:
+        url = item.get("landing_page_url") or item.get("doi") or item.get("work_id") or ""
+        title = item.get("title") or "Untitled scholarly work"
+        details = [str(item.get("year") or ""), str(item.get("venue") or ""), "citations=" + str(item.get("cited_by_count") or 0)]
+        if item.get("is_open_access"):
+            details.append("open-access copy reported by index; verify license")
+        output.append(SearchResult(title=title, url=url, snippet="; ".join(x for x in details if x), source_date=str(item.get("year") or "")))
+    return output
+
+
+def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
+    """Combine scholarly discovery and general web results, deduplicated by URL.
+
+    Missing Brave credentials do not disable the public OpenAlex metadata search.
+    """
+    results: list[SearchResult] = []
+    errors = []
+    for provider in (scholarly_search, brave_search):
+        try:
+            for item in provider(query, limit):
+                if item.url and item.url not in {existing.url for existing in results}:
+                    results.append(item)
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+    if not results and errors:
+        raise ProviderError("All search providers failed: " + ", ".join(errors))
+    return results[:limit]
