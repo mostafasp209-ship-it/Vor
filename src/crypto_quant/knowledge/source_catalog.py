@@ -26,7 +26,6 @@ SOURCES = (
  ResearchSource("federal_reserve","Federal Reserve FEDS","https://www.federalreserve.gov/econres/feds/","public research portal",("macro","rates","finance","econometrics"),"US monetary policy, rates, banking, asset pricing."),
  ResearchSource("ecb","European Central Bank Working Papers","https://www.ecb.europa.eu/pub/research/working-papers/html/index.en.html","public research portal",("macro","fx","rates","finance"),"Euro area macroeconomics, monetary policy, markets."),
  ResearchSource("ssrn","SSRN","https://www.ssrn.com/","public search website; access varies",("finance","quant","technical_analysis","crypto"),"Finance and social-science preprints; screen for peer review and version quality."),
- ResearchSource("cochrane_not_applicable","", "", "disabled", (), "Placeholder intentionally unused."),
 )
 
 # Explicit routes keep each expert's source set relevant rather than sending every
@@ -55,3 +54,39 @@ def sources_for_topics(topics: tuple[str, ...] | list[str]) -> tuple[ResearchSou
                 chosen.append(by_id[source_id])
                 seen.add(source_id)
     return tuple(chosen)
+
+
+def search_openalex(query: str, limit: int = 10, mailto: str | None = None) -> list[dict]:
+    """Search OpenAlex works metadata; abstracts/open PDFs are not guaranteed.
+
+    Uses only the Python standard library. Keep limits modest and follow API terms.
+    """
+    import json
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    if not query.strip():
+        return []
+    if not 1 <= limit <= 50:
+        raise ValueError("limit must be between 1 and 50")
+    params = {"search": query, "per-page": limit, "select": "id,doi,title,publication_year,type,cited_by_count,authorships,open_access,primary_location"}
+    if mailto:
+        params["mailto"] = mailto
+    request = Request("https://api.openalex.org/works?" + urlencode(params), headers={"User-Agent": "VorResearch/0.1 (research metadata client)"})
+    with urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    results = []
+    for work in payload.get("results", []):
+        location = work.get("primary_location") or {}
+        source = location.get("source") or {}
+        oa = work.get("open_access") or {}
+        results.append({
+            "source_id": "openalex", "work_id": work.get("id"), "doi": work.get("doi"),
+            "title": work.get("title"), "year": work.get("publication_year"),
+            "type": work.get("type"), "cited_by_count": work.get("cited_by_count"),
+            "venue": source.get("display_name"), "landing_page_url": location.get("landing_page_url"),
+            "pdf_url": location.get("pdf_url"), "is_open_access": oa.get("is_oa", False),
+            "authors": [a.get("author", {}).get("display_name") for a in work.get("authorships", [])],
+            "retrieval_note": "Metadata discovery only; verify full-text access and license before ingestion.",
+        })
+    return results
