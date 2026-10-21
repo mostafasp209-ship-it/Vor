@@ -59,11 +59,13 @@ Or explicitly choose the panel:
 
     python -m crypto_quant.experts.cli --panel --experts trend_momentum,mean_reversion,market_microstructure,risk_auditor --max-experts 4 --question "Compare strategy evidence"
 
-Adapters are optional and make no requests unless explicitly called. Search snippets alone are not authoritative evidence; review and cite source pages.
+Adapters are optional and make no requests unless explicitly called. Search queries include each specialist's methodology and configured topic terms; the research note preserves publication/source dates when the provider supplies them.
+
+The workflow retrieves local knowledge using both the question and the specialist's own specialty/search topics. It keeps model-claimed citations for audit, but only exposes URLs actually returned by the search provider as verified `source_refs`. If neither local knowledge nor web sources were retrieved, a directional LONG/SHORT output is suppressed to `NO_TRADE`. This is an evidence-quality guardrail, not proof that any remaining opinion is correct. Search metadata/snippets are still not the same as reading a paper's full text.
 
 ## Scope and remaining work
 
-- The registry currently contains distinct research archetypes, not 5,000 independent deployed experts. The panel can select a bounded subset and preserve disagreement; the default is six experts to control latency and cost.
+- The registry currently contains 30 distinct research archetypes, not 5,000 independent deployed experts. The panel can select a bounded subset and preserve disagreement; the default is six experts to control latency and cost.
 - No 15,000-source corpus has been collected or indexed; source discovery returns metadata/snippets unless authorized full text is separately ingested.
 - Live provider connections must be tested in the target environment.
 - No automated review-and-acceptance pipeline for learned knowledge exists yet.
