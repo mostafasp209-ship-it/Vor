@@ -6,30 +6,45 @@ import pytest
 from crypto_quant.experts import ExpertOpinion, ResearchAgent, SearchResult, default_experts, get_expert
 from crypto_quant.experts.synthesis import summarize_opinions
 
+
 def test_registry_has_distinct_starter_specialists():
     experts = default_experts()
-    assert len(experts) >= 5
+    assert len(experts) >= 25
     assert len({e.agent_id for e in experts}) == len(experts)
     assert get_expert("risk_auditor").specialty
 
-def test_research_agent_persists_cited_search_results(tmp_path: Path):
+
+def test_research_agent_persists_specialist_queries_and_source_dates(tmp_path: Path):
+    seen_queries = []
+
     def search(query: str, limit: int):
-        return [SearchResult("Public research", "https://example.org/paper", f"Matched query: {query}")]
-    agent = ResearchAgent(default_experts()[0], tmp_path / "memory.jsonl", search, max_results=2)
+        seen_queries.append(query)
+        return [
+            SearchResult("Public research", "https://example.org/paper", f"Matched query: {query}", "2025"),
+            SearchResult("Duplicate URL", "https://example.org/paper", "duplicate result"),
+        ]
+
+    agent = ResearchAgent(get_expert("trend_momentum"), tmp_path / "memory.jsonl", search, max_results=2)
     note = agent.research("how to test a trading hypothesis")
     assert note.source_refs == ("https://example.org/paper",)
+    assert "trend persistence and momentum" in seen_queries[0]
+    assert "time series momentum academic research" in seen_queries[0]
+    assert "[2025]" in note.findings[0]
     assert len(agent.read_memory()) == 1
     stored = json.loads((tmp_path / "memory.jsonl").read_text())
-    assert stored["agent_id"] == default_experts()[0].agent_id
+    assert stored["agent_id"] == "trend_momentum"
+
 
 def test_no_provider_is_explicit_and_does_not_claim_to_search(tmp_path: Path):
     note = ResearchAgent(default_experts()[0], tmp_path / "memory.jsonl").research("test")
     assert not note.source_refs
     assert any("No search provider configured" in item for item in note.limitations)
 
+
 def test_opinion_validates_confidence():
     with pytest.raises(ValueError):
         ExpertOpinion("x", "test", "BTC", confidence=1.1)
+
 
 def test_synthesis_does_not_call_vote_a_probability():
     opinions = [ExpertOpinion("a", "trend", "BTC", action="LONG", confidence=.7),
