@@ -10,8 +10,8 @@ from crypto_quant.specialists import DOMAINS, specialist_slots
 
 def sample_data(n=100):
     close = pd.Series(np.linspace(100, 130, n) + np.sin(np.arange(n) / 3))
-    return pd.DataFrame({"open": close, "high": close + 1, "low": close - 1,
-                         "close": close, "volume": np.full(n, 1000.0)},
+    return pd.DataFrame({"open": close.to_numpy(), "high": (close + 1).to_numpy(), "low": (close - 1).to_numpy(),
+                         "close": close.to_numpy(), "volume": np.full(n, 1000.0)},
                         index=pd.date_range("2024-01-01", periods=n, freq="h"))
 
 
