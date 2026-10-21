@@ -21,7 +21,7 @@ Set these environment variables in the deployment environment; never commit API 
 - OPENAI_MODEL optionally selects the model; the default is gpt-4.1-mini.
 - OPENAI_BASE_URL optionally sets an OpenAI-compatible API base URL.
 - BRAVE_SEARCH_API_KEY enables Brave Search web queries.
-- GOOGLE_API_KEY and GOOGLE_CSE_ID enable Google Programmable Search Engine queries (configure the engine scope in Google first).
+- GOOGLE_API_KEY and GOOGLE_CSE_ID enable the legacy Google Custom Search JSON API adapter only for eligible existing accounts; Google's official docs say the API is closed to new customers and existing customers must transition by 2027-01-01. Prefer the general web-search provider for new deployments.
 - OPENALEX_MAILTO is optional contact metadata for scholarly API requests.
 
 Install the package, set both keys, ingest licensed sources into the local index, then run:
