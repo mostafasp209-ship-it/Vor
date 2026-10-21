@@ -58,3 +58,20 @@ for key in ("candles", "total_return", "max_drawdown", "sharpe_annualized",
 ```
 
 The backtester only uses candles available at each signal timestamp and applies that signal to the following close-to-close return. Returns are historical simulation results, not a forecast. This first version does not model funding, dynamic spreads, market impact, or live execution, and has not yet been run against live-fetched data in this environment.
+
+
+## Specialist ensemble
+
+The first executable ensemble contains two transparent signal specialists (EMA trend and RSI momentum) and a volatility gate. It records each specialist's vote and rationale, and abstains with `NO_TRADE` when history is too short or volatility is unusually high:
+
+```python
+from crypto_quant.ensemble import analyze_ensemble
+
+decision = analyze_ensemble(candles)
+print(decision.action, decision.score, decision.confidence)
+for opinion in decision.opinions:
+    print(opinion.name, opinion.vote, opinion.confidence, opinion.reason)
+print(decision.reasons)
+```
+
+The registry describes 5,000 virtual slots across 50 research domains, but those slots are placeholders—not 5,000 trained models or real analysts. Only the specialists with implemented and tested logic should contribute to decisions. Automated tests run through GitHub Actions on pushes and pull requests.
