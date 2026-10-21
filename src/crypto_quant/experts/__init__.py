@@ -6,6 +6,7 @@ from .schema import ExpertOpinion
 __all__ = ["ExpertOpinion", "ResearchAgent", "ResearchNote", "SearchResult", "default_experts", "get_expert"]
 
 from .workflow import ExpertWorkflow
+from .panel import PanelCoordinator
 from .providers import ProviderError, brave_search, scholarly_search, multi_source_search, openai_compatible_chat
 
-__all__ += ["ExpertWorkflow", "ProviderError", "brave_search", "scholarly_search", "multi_source_search", "openai_compatible_chat"]
+__all__ += ["ExpertWorkflow", "PanelCoordinator", "ProviderError", "brave_search", "scholarly_search", "multi_source_search", "openai_compatible_chat"]
