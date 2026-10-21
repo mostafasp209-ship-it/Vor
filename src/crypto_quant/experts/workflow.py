@@ -9,13 +9,13 @@ from ..knowledge import KnowledgeIndex
 from ..knowledge.source_catalog import sources_for_topics
 
 
-def _retrieve_specialist_knowledge(index: KnowledgeIndex, profile: ExpertProfile) -> list[dict]:
+def _retrieve_specialist_knowledge(index: KnowledgeIndex, profile: ExpertProfile, question: str) -> list[dict]:
     """Retrieve both question-relevant and methodology-specific local chunks.
 
     Searching only the user's question often misses a specialist's own literature.
     Keep this deterministic, bounded, and dependency-free; deduplicate by source/chunk.
     """
-    queries = [profile.specialty, *profile.search_topics[:3]]
+    queries = [question, profile.specialty, *profile.search_topics[:3]]
     found: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for query in queries:
@@ -46,7 +46,7 @@ class ExpertWorkflow:
         question = question.strip()
         if not question:
             raise ValueError("question must not be empty")
-        local = _retrieve_specialist_knowledge(self.index, self.profile)
+        local = _retrieve_specialist_knowledge(self.index, self.profile, question)
         search_agent = ResearchAgent(self.profile, self.memory_path, self.search_provider, max_results=5)
         note = search_agent.research(question)
         system = (
