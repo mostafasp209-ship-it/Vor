@@ -24,3 +24,12 @@ The goal is relevant, traceable research for each specialist—not a giant unfil
 - ECB Working Papers: https://www.ecb.europa.eu/pub/research/working-papers/html/index.en.html
 
 This catalog is the initial verified shortlist, not an exhaustive country-by-country inventory. Expand it by discipline and jurisdiction as the discovery pipeline is implemented and tested.
+
+
+## Google web search integration
+
+The expert workflow can use Google's Programmable Search Engine JSON API as an additional provider when both `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` are configured. Create/configure a Programmable Search Engine for the intended scope and enable the Custom Search JSON API in Google Cloud. This API is quota- and billing/eligibility-dependent; it is not an unrestricted crawler of every Google result or every country's entire web. The adapter asks for at most 10 results per request, stores result URLs/snippets as research references, and should be combined with scholarly discovery and specialist-specific source routing.
+
+Official setup references:
+- Programmable Search Engine: https://programmablesearchengine.google.com/
+- Custom Search JSON API documentation: https://developers.google.com/custom-search/v1/overview
