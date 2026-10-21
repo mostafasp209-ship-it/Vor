@@ -27,8 +27,7 @@ class ExpertWorkflow:
         user = json.dumps({"specialist": self.profile.name, "specialty": self.profile.specialty,
             "method_checklist": self.profile.method_checklist, "known_failure_modes": self.profile.failure_modes,
             "question": question, "market_context": market_context,
-            "local_sources": local, "web_results": [{"title": f.title, "url": f.url, "snippet": f.snippet,
-            "source_date": f.source_date} for f in (self.search_provider(question, 5) if False else [])],
+            "local_sources": local, "web_results": [{"url": url, "finding": finding} for url, finding in zip(note.source_refs, note.findings)],
             "search_note": {"findings": note.findings, "source_refs": note.source_refs,
             "limitations": note.limitations}}, ensure_ascii=False)
         answer = self.reasoning_provider(system, user)
