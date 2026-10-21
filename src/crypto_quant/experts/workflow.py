@@ -5,6 +5,7 @@ from .registry import ExpertProfile
 from .research_loop import ResearchAgent
 from .providers import multi_source_search, openai_compatible_chat
 from ..knowledge import KnowledgeIndex
+from ..knowledge.source_catalog import sources_for_topics
 
 class ExpertWorkflow:
     def __init__(self, profile: ExpertProfile, index: KnowledgeIndex, memory_path: str | Path,
@@ -27,7 +28,7 @@ class ExpertWorkflow:
         user = json.dumps({"specialist": self.profile.name, "specialty": self.profile.specialty,
             "method_checklist": self.profile.method_checklist, "known_failure_modes": self.profile.failure_modes,
             "question": question, "market_context": market_context,
-            "local_sources": local, "web_results": [{"url": url, "finding": finding} for url, finding in zip(note.source_refs, note.findings)],
+            "recommended_research_sources": [{"source_id": source.source_id, "name": source.name, "url": source.url, "access": source.access, "why_relevant": source.notes} for source in sources_for_topics(self.profile.source_topics)],\n            "local_sources": local, "web_results": [{"url": url, "finding": finding} for url, finding in zip(note.source_refs, note.findings)],
             "search_note": {"findings": note.findings, "source_refs": note.source_refs,
             "limitations": note.limitations}}, ensure_ascii=False)
         answer = self.reasoning_provider(system, user)
