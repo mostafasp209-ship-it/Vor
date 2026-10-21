@@ -63,3 +63,29 @@ def run_backtest(
         "equity_curve": curve,
         "note": "Historical simulation only; funding, spread dynamics, market impact, and live execution risk are excluded.",
     }
+
+
+
+def backtest(
+    ohlcv: pd.DataFrame,
+    fee_rate: float = 0.001,
+    slippage_rate: float = 0.0005,
+) -> dict[str, float | int]:
+    """Backward-compatible wrapper for the original public API.
+
+    Returns legacy metric names while using the validated EMA/RSI simulation.
+    Fee and slippage rates are decimal rates per unit of turnover.
+    """
+    if fee_rate < 0 or slippage_rate < 0:
+        raise ValueError("cost assumptions cannot be negative")
+    result = run_backtest(
+        ohlcv,
+        fee_bps=fee_rate * 10_000.0,
+        slippage_bps=slippage_rate * 10_000.0,
+    )
+    return {
+        "total_return": float(result["total_return"]),
+        "max_drawdown": float(result["max_drawdown"]),
+        "position_changes": int(result["trades_or_rebalances"]),
+        "final_equity_multiple": float(result["equity_curve"]["equity"].iloc[-1]),
+    }
