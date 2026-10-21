@@ -1,38 +1,35 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from crypto_quant.population import build_population, evaluate_population
-
 
 def frame(n=160):
     close = 100 * np.exp(np.cumsum(0.0005 + 0.01 * np.sin(np.arange(n) / 5)))
-    return pd.DataFrame({
-        "open": close * 0.999,
-        "high": close * 1.01,
-        "low": close * 0.99,
-        "close": close,
-        "volume": np.full(n, 100.0),
-    }, index=pd.date_range("2026-01-01", periods=n, freq="h", tz="UTC"))
+    return pd.DataFrame({"open": close * 0.999, "high": close * 1.01,
+        "low": close * 0.99, "close": close, "volume": np.full(n, 100.0)},
+        index=pd.date_range("2026-01-01", periods=n, freq="h", tz="UTC"))
 
-
-def test_population_contains_5000_deterministic_candidates():
+def test_population_contains_5000_unique_deterministic_configurations():
     candidates = build_population()
     assert len(candidates) == 5000
-    assert len({candidate["id"] for candidate in candidates}) == 5000
-    assert {candidate["family"] for candidate in candidates} == {
-        "ema_trend", "rsi_reversion", "breakout", "momentum", "volatility_filtered"
-    }
+    assert len({c["id"] for c in candidates}) == 5000
+    assert len({(c["family"], c["fast_window"], c["slow_window"], c["threshold"])
+                for c in candidates}) == 5000
+    assert {c["family"] for c in candidates} == {
+        "ema_trend", "rsi_reversion", "breakout", "momentum", "volatility_filtered"}
 
+def test_population_rejects_size_above_unique_grid():
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        build_population(5001)
 
 def test_population_evaluation_separates_train_and_holdout():
     result = evaluate_population(frame(), size=25, report_top=5)
     assert result["evaluated_candidates"] == 25
+    assert result["unique_configurations"] == 25
     assert result["train_candles"] == 112
     assert result["holdout_candles"] == 48
     assert len(result["top_candidates"]) == 5
     assert "holdout_return" in result["top_candidates"][0]
-
 
 def test_population_rejects_short_data():
     with pytest.raises(ValueError, match="100 candles"):
