@@ -73,7 +73,7 @@ def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
     errors = []
     for provider in (scholarly_search, brave_search, google_search):
         try:
-            for item in provider(query, limit):
+            for item in provider(query, min(limit, 10) if provider is google_search else limit):
                 if item.url and item.url not in {existing.url for existing in results}:
                     results.append(item)
         except Exception as exc:
