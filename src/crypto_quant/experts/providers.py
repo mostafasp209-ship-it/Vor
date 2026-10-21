@@ -111,23 +111,44 @@ def scholarly_search(query: str, limit: int = 5) -> list[SearchResult]:
 
 
 def multi_source_search(query: str, limit: int = 5) -> list[SearchResult]:
-    """Combine scholarly discovery and optional general web results, deduplicated by URL.
+    """Merge scholarly and web results fairly, deduplicating URLs and preserving diversity.
 
-    Missing Brave/Google credentials do not disable public OpenAlex metadata search.
+    Each configured provider gets a chance to contribute before the final limit is
+    applied. Missing optional-provider credentials do not disable OpenAlex metadata.
     """
-    results: list[SearchResult] = []
-    errors = []
-    for provider in (scholarly_search, brave_search, google_search):
+    if not query.strip():
+        return []
+    if not 1 <= limit <= 20:
+        raise ValueError("limit must be between 1 and 20")
+
+    providers = (scholarly_search, brave_search, google_search)
+    batches: list[list[SearchResult]] = []
+    errors: list[str] = []
+    for provider in providers:
         try:
             provider_limit = min(limit, 10) if provider is google_search else limit
-            for item in provider(query, provider_limit):
-                if item.url and item.url not in {existing.url for existing in results}:
-                    results.append(item)
+            batches.append(list(provider(query, provider_limit)))
         except Exception as exc:
-            errors.append(type(exc).__name__)
+            errors.append(f"{provider.__name__}:{type(exc).__name__}")
+
+    # Round-robin keeps one high-volume source from crowding out every other source.
+    results: list[SearchResult] = []
+    seen: set[str] = set()
+    max_batch = max((len(batch) for batch in batches), default=0)
+    for rank in range(max_batch):
+        for batch in batches:
+            if rank >= len(batch):
+                continue
+            item = batch[rank]
+            normalized_url = item.url.strip().rstrip("/")
+            if normalized_url and normalized_url not in seen:
+                seen.add(normalized_url)
+                results.append(item)
+                if len(results) >= limit:
+                    return results
     if not results and errors:
         raise ProviderError("All search providers failed: " + ", ".join(errors))
-    return results[:limit]
+    return results
 
 
 def google_search(query: str, limit: int = 5) -> list[SearchResult]:
