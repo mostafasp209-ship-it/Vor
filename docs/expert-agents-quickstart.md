@@ -39,7 +39,7 @@ Adapters are optional and make no requests unless explicitly called. API access 
 ## Scope and remaining work
 
 - The registry currently contains distinct research archetypes, not 5,000 independent deployed experts. The panel can select a bounded subset and preserve disagreement; the default is six experts to control latency and API cost.
-- Google integration uses the official Programmable Search Engine JSON API and requires GOOGLE_API_KEY plus GOOGLE_CSE_ID. It searches the configured engine scope, not every page indexed by Google. Check Google's current eligibility, quota and billing rules before deployment.
+- A Google Programmable Search Engine JSON API adapter exists for legacy/eligible accounts and requires GOOGLE_API_KEY plus GOOGLE_CSE_ID. Important: Google's official documentation currently says this API is closed to new customers and existing customers must transition by January 1, 2027. Do not rely on it for a new deployment; use the general web-search adapter for broad web search, and evaluate Vertex AI Search only when a bounded set of domains is sufficient. See https://developers.google.com/custom-search/v1/overview.
 - No 15,000-source corpus has been collected or indexed; source discovery returns metadata/snippets unless authorized full text is separately ingested.
 - Live providers are not verified until valid credentials and a successful integration test are supplied.
 - No automated review-and-acceptance pipeline for learned knowledge exists yet.
