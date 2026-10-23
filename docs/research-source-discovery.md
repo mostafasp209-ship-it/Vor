@@ -33,3 +33,15 @@ The code includes an adapter for Google's Programmable Search Engine JSON API, r
 Official setup references:
 - Programmable Search Engine: https://programmablesearchengine.google.com/
 - Custom Search JSON API documentation: https://developers.google.com/custom-search/v1/overview
+
+
+## Evidence labels emitted by the OpenAlex adapter
+
+Each returned work has a stable `record_id` (DOI when supplied, otherwise the OpenAlex work ID), authors, year, venue, landing page, and any advertised PDF URL. The adapter reconstructs the abstract only when OpenAlex actually supplies its abstract index.
+
+- `evidence_level=metadata`: discovery metadata only; no abstract was supplied.
+- `evidence_level=abstract`: the abstract is available, but the full paper has not been ingested.
+- `full_text_ingested=false`: deliberately remains false for discovery results. A PDF URL or OpenAlex open-access flag alone is not proof that Vor downloaded, read, or is licensed to store the full text.
+- `license=null`: the adapter does not infer a license from availability. A future ingestion step must independently verify and persist the applicable license/terms.
+
+Tests mock the API response to verify DOI fallback, abstract reconstruction, and that metadata/abstract records are never mislabeled as full text. These tests do not require a network connection or API key.
