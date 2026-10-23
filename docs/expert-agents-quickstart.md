@@ -61,7 +61,7 @@ Or explicitly choose the panel:
 
 Adapters are optional and make no requests unless explicitly called. Search queries include each specialist's methodology and configured topic terms; the research note preserves publication/source dates when the provider supplies them.
 
-The workflow retrieves local knowledge using both the question and the specialist's own specialty/search topics. It keeps model-claimed citations for audit, but only exposes URLs actually returned by the search provider as verified `source_refs`. If neither local knowledge nor web sources were retrieved, a directional LONG/SHORT output is suppressed to `NO_TRADE`. This is an evidence-quality guardrail, not proof that any remaining opinion is correct. Search metadata/snippets are still not the same as reading a paper's full text.
+The workflow retrieves local knowledge using both the question and the specialist's own specialty/search topics. It keeps model-claimed citations for audit, but only exposes URLs actually returned by the search provider as verified `source_refs`. If neither local knowledge nor web sources were retrieved, a directional LONG/SHORT output is suppressed to `NO_TRADE`. The panel also suppresses a directional moderator conclusion when no directional specialist opinion has local or web source provenance, and duplicate specialist IDs are rejected. These are evidence-quality guardrails, not proof that any remaining opinion is correct. Search metadata/snippets are still not the same as reading a paper's full text.
 
 ## Scope and remaining work
 
