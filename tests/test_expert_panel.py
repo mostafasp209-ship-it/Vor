@@ -44,3 +44,28 @@ def test_panel_enforces_bounded_cost_and_unknown_specialists(tmp_path):
         panel.discuss("test", max_experts=31)
     with pytest.raises(KeyError):
         panel.discuss("test", expert_ids=["not_a_real_expert"], max_experts=2)
+
+
+
+def directional_moderator(system, user):
+    return '{"summary":"Bullish","common_ground":[],"disagreements":[],"strongest_evidence":[],"counter_evidence":[],"data_quality_flags":[],"next_tests":[],"provisional_action":"LONG","confidence":0.95}'
+
+
+def test_panel_suppresses_directional_moderator_without_sourced_opinions(tmp_path):
+    panel = PanelCoordinator(
+        FakeIndex(), tmp_path, reasoning_provider=directional_moderator,
+        workflow_factory=FakeWorkflow
+    )
+    result = panel.discuss(
+        "test question", expert_ids=["trend_momentum", "risk_auditor"], max_experts=2
+    )
+    assert result["discussion"]["provisional_action"] == "NO_TRADE"
+    assert result["discussion"]["confidence"] == 0.0
+    assert "directional_panel_action_suppressed_no_sourced_directional_opinion" in result["discussion"]["data_quality_flags"]
+
+
+def test_panel_rejects_duplicate_specialist_ids(tmp_path):
+    panel = PanelCoordinator(FakeIndex(), tmp_path, reasoning_provider=moderator, workflow_factory=FakeWorkflow)
+    import pytest
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        panel.discuss("test", expert_ids=["risk_auditor", "risk_auditor"], max_experts=2)
