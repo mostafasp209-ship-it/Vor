@@ -77,7 +77,7 @@ def search_openalex(query: str, limit: int = 10, mailto: str | None = None) -> l
         return []
     if not 1 <= limit <= 50:
         raise ValueError("limit must be between 1 and 50")
-    params = {"search": query, "per-page": limit, "select": "id,doi,title,publication_year,type,cited_by_count,authorships,open_access,primary_location"}
+    params = {"search": query, "per-page": limit, "select": "id,doi,title,publication_year,type,cited_by_count,authorships,open_access,primary_location,abstract_inverted_index"}
     if mailto:
         params["mailto"] = mailto
     request = Request("https://api.openalex.org/works?" + urlencode(params), headers={"User-Agent": "VorResearch/0.1 (research metadata client)"})
@@ -88,13 +88,27 @@ def search_openalex(query: str, limit: int = 10, mailto: str | None = None) -> l
         location = work.get("primary_location") or {}
         source = location.get("source") or {}
         oa = work.get("open_access") or {}
+        # OpenAlex stores abstracts as a token -> positions inverted index.
+        # Reconstruct only when the API actually supplied it; never label metadata as full text.
+        abstract_index = work.get("abstract_inverted_index") or {}
+        abstract_words: list[tuple[int, str]] = []
+        for word, positions in abstract_index.items():
+            for position in positions:
+                abstract_words.append((position, word))
+        abstract = " ".join(word for _, word in sorted(abstract_words)) or None
+        work_id = work.get("id")
+        doi = work.get("doi")
         results.append({
-            "source_id": "openalex", "work_id": work.get("id"), "doi": work.get("doi"),
-            "title": work.get("title"), "year": work.get("publication_year"),
+            "source_id": "openalex", "work_id": work_id, "record_id": doi or work_id,
+            "doi": doi, "title": work.get("title"), "year": work.get("publication_year"),
             "type": work.get("type"), "cited_by_count": work.get("cited_by_count"),
             "venue": source.get("display_name"), "landing_page_url": location.get("landing_page_url"),
             "pdf_url": location.get("pdf_url"), "is_open_access": oa.get("is_oa", False),
             "authors": [a.get("author", {}).get("display_name") for a in work.get("authorships", [])],
-            "retrieval_note": "Metadata discovery only; verify full-text access and license before ingestion.",
+            "abstract": abstract,
+            "evidence_level": "abstract" if abstract else "metadata",
+            "full_text_ingested": False,
+            "license": None,
+            "retrieval_note": "Discovery metadata/abstract only. A PDF URL or OA flag is not proof of a verified license or ingested full text.",
         })
     return results
