@@ -48,6 +48,8 @@ class PanelCoordinator:
         if max_experts < 1 or max_experts > 30:
             raise ValueError("max_experts must be between 1 and 30")
         if expert_ids:
+            if len(set(expert_ids)) != len(expert_ids):
+                raise ValueError("expert_ids must not contain duplicates")
             profiles = [get_expert(agent_id) for agent_id in expert_ids]
         else:
             profiles = _select_relevant_experts(question + " " + market_context, max_experts)
@@ -136,6 +138,22 @@ class PanelCoordinator:
                 "next_tests": [], "provisional_action": "NO_TRADE", "confidence": 0.0,
                 "moderator_error_type": type(exc).__name__
             }
+        # A moderator must not manufacture a directional panel result when none of
+        # the directional opinions has any retrieved source provenance.
+        sourced_directional = [
+            item for item in opinions
+            if item.get("action") in {"LONG", "SHORT"}
+            and (item.get("retrieved_web_sources") or item.get("retrieved_local_sources"))
+        ]
+        if discussion.get("provisional_action") in {"LONG", "SHORT"} and not sourced_directional:
+            discussion["provisional_action"] = "NO_TRADE"
+            discussion["confidence"] = 0.0
+            flags = discussion.get("data_quality_flags", [])
+            if not isinstance(flags, list):
+                flags = [str(flags)]
+            flags.append("directional_panel_action_suppressed_no_sourced_directional_opinion")
+            discussion["data_quality_flags"] = flags
+
         return {
             "question": question, "market_context": market_context, "research_only": True,
             "panel_size_requested": len(profiles), "panel_size_completed": len(opinions),
