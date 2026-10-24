@@ -45,3 +45,27 @@ Each returned work has a stable `record_id` (DOI when supplied, otherwise the Op
 - `license=null`: the adapter does not infer a license from availability. A future ingestion step must independently verify and persist the applicable license/terms.
 
 Tests mock the API response to verify DOI fallback, abstract reconstruction, and that metadata/abstract records are never mislabeled as full text. These tests do not require a network connection or API key.
+
+
+## Persistent local research catalog
+
+The new `ResearchCatalog` stores discovered records in a local SQLite database, deduplicates DOI variants (for example `https://doi.org/10.1234/ABC` and `10.1234/abc`), supports simple keyword search, and reports counts by evidence level. It is standard-library-only; no paid API or database service is required.
+
+Example from Python after installing the project:
+
+```python
+from crypto_quant.knowledge import ResearchCatalog, discover_openalex_into_catalog
+
+catalog = ResearchCatalog("data/research_catalog.sqlite3")
+run = discover_openalex_into_catalog(
+    catalog,
+    query="cryptocurrency market liquidity volatility",
+    limit=10,
+)
+print(run["counts"])
+print(catalog.stats())
+for paper in catalog.search("liquidity volatility", limit=5):
+    print(paper["title"], paper.get("doi"), paper["evidence_level"])
+```
+
+The discovery helper stores the UTC retrieval timestamp. Repeated searches refresh matching records rather than multiplying DOI duplicates. Stronger evidence is not downgraded by a later metadata-only refresh. The catalog rejects full-text claims unless the record explicitly marks full text as ingested and includes a license/authorization field; callers must only provide that field after independently verifying it. This is a local metadata/abstract catalog, not a claim that a corpus of full papers has already been collected.
