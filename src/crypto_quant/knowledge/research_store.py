@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -138,3 +139,12 @@ class ResearchCatalog:
         result = {"total": total, "metadata": 0, "abstract": 0, "full_text": 0}
         result.update({level: count for level, count in rows})
         return result
+
+
+def discover_openalex_into_catalog(catalog: ResearchCatalog, query: str, limit: int = 10, mailto: str | None = None) -> dict[str, object]:
+    """Discover public OpenAlex metadata and persist it with a UTC retrieval timestamp."""
+    from crypto_quant.knowledge.source_catalog import search_openalex
+    records = search_openalex(query, limit=limit, mailto=mailto)
+    retrieved_at = datetime.now(timezone.utc).isoformat()
+    counts = catalog.upsert(records, retrieved_at=retrieved_at)
+    return {"query": query, "retrieved_at": retrieved_at, "counts": counts, "records": records}
