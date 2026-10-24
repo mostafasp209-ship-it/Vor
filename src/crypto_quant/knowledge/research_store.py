@@ -103,7 +103,7 @@ class ResearchCatalog:
                             ELSE research_records.evidence_level END,
                         full_text_ingested=MAX(research_records.full_text_ingested,excluded.full_text_ingested),
                         retrieved_at=COALESCE(excluded.retrieved_at,research_records.retrieved_at),
-                        record_json=CASE WHEN research_records.evidence_level='full_text' AND excluded.evidence_level!='full_text' THEN research_records.record_json ELSE excluded.record_json END
+                        record_json=CASE WHEN (research_records.evidence_level='full_text' AND excluded.evidence_level!='full_text') OR (research_records.evidence_level='abstract' AND excluded.evidence_level='metadata') THEN research_records.record_json ELSE excluded.record_json END
                 """, (key, record_id, source_id, _normalized_doi(record.get("doi")), title, year,
                       evidence, int(full_text), record.get("retrieved_at"), payload))
                 if existing:
