@@ -69,3 +69,26 @@ for paper in catalog.search("liquidity volatility", limit=5):
 ```
 
 The discovery helper stores the UTC retrieval timestamp. Repeated searches refresh matching records rather than multiplying DOI duplicates. Stronger evidence is not downgraded by a later metadata-only refresh. The catalog rejects full-text claims unless the record explicitly marks full text as ingested and includes a license/authorization field; callers must only provide that field after independently verifying it. This is a local metadata/abstract catalog, not a claim that a corpus of full papers has already been collected.
+
+
+## Retrieval quality evaluation
+
+The offline evaluator computes macro-averaged precision@k, recall@k and mean reciprocal rank (MRR@k) for queries with explicit relevance labels. It is intended to make retrieval regressions visible before expanding the agent population.
+
+A minimal example:
+
+```python
+from crypto_quant.knowledge import ResearchCatalog, evaluate_retrieval
+
+catalog = ResearchCatalog("data/research_catalog.sqlite3")
+report = evaluate_retrieval(catalog, [
+    {
+        "query": "crypto market liquidity",
+        # Replace these example IDs with records judged relevant by a reviewer.
+        "relevant_record_ids": ["10.1234/example-doi"],
+    },
+], k=5)
+print(report["precision_at_k"], report["recall_at_k"], report["mrr_at_k"])
+```
+
+The evaluator does not invent relevance judgments or fetch papers. Build a benchmark by having a reviewer label relevant record IDs for representative queries (for example, momentum, market-making, liquidity, volatility, exchange microstructure and portfolio risk), document the labeling rules, and keep the same held-out cases when comparing changes. The synthetic records in automated tests only verify metric contracts; they are **not** evidence that real-world search relevance is good. Keyword search is still a simple baseline, not semantic retrieval.
