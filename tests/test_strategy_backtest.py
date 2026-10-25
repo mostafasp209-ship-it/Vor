@@ -26,7 +26,7 @@ def _candles(n=500):
 
 
 def test_breakout_backtest_returns_metrics_and_trade_records():
-    result = backtest_breakout_volume(_candles(), trend_filter=False, vol_mult=1.2, min_trades=0)
+    result = backtest_breakout_volume(_candles(), trend_filter=False, vol_mult=1.2)
     assert result["trades"] >= 0
     assert 0 <= result["win_rate"] <= 1
     assert "trades_frame" in result
