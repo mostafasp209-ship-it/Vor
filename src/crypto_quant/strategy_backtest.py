@@ -108,7 +108,7 @@ def _features(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
         (data["low"] - previous_close).abs(),
     ], axis=1).max(axis=1)
     data["atr"] = true_range.rolling(14, min_periods=14).mean()
-    data["volume_sma"] = data["volume"].rolling(20, min_periods=20).mean()
+    data["volume_sma"] = data["volume"].rolling(20, min_periods=20).mean().shift(1)
     data["ma200"] = data["close"].rolling(200, min_periods=200).mean()
     data["prior_high"] = data["high"].rolling(lookback).max().shift(1)
     data["prior_low"] = data["low"].rolling(lookback).min().shift(1)
@@ -187,7 +187,7 @@ def _run_signals(
         "win_rate": float((values > 0).mean()) if len(values) else 0.0,
         "mean_r": float(values.mean()) if len(values) else 0.0,
         "total_r": float(values.sum()) if len(values) else 0.0,
-        "profit_factor": gross_wins / gross_losses if gross_losses > 0 else (float("inf") if gross_wins > 0 else 0.0),
+        "profit_factor": gross_wins / gross_losses if gross_losses > 0 else (None if gross_wins > 0 else 0.0),
         "trades_frame": trade_frame,
         "note": "Stop is assumed first when stop and target are both inside one candle; fees and slippage are estimated.",
     }
