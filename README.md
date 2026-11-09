@@ -124,3 +124,34 @@ Research references informing this design:
 - [Freqtrade backtesting documentation](https://github.com/freqtrade/freqtrade/blob/develop/docs/backtesting.md)
 
 These references are used as design guidance, not copied wholesale into this project. External engines such as Freqtrade or VectorBT should be evaluated separately before adopting them as dependencies; adding a large framework without a tested need can increase maintenance and runtime cost.
+
+
+## Trade-level crypto futures strategy discovery engine
+
+Vor includes an independent search engine for Binance USD-M perpetual futures.
+It explores five executable rule families: trend pullback, breakout, mean reversion,
+directional momentum and range expansion. Each candidate has explicit entry logic,
+ATR-based stop, fixed 3R/3.5R/4R target and maximum holding period.
+
+Install and run:
+
+```bash
+pip install -e ".[dev]"
+python scripts/run_strategy_search.py --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT --intervals 15m,1h --days 365
+```
+
+The engine downloads public futures candles without an API key, forms signals at candle
+close, enters at the next candle open, and estimates fees plus slippage. It assumes the
+stop is hit first when stop and target are both touched in the same candle.
+
+History is split chronologically into 56% train, 14% validation and 30% final test.
+Candidates are ranked using train and validation data; only the frozen shortlist is
+evaluated on the untouched final test segment. Default acceptance gates require at
+least 30 trades in both validation and test, at least 70% net win rate, at least 3.0
+realized average win/loss ratio, and positive expectancy in both segments. A configured
+3R target does not guarantee a realized 3:1 payoff. If no candidate passes, the report
+must show zero qualified strategies rather than silently weakening the gates.
+
+Reports are written to `artifacts/strategy_search/`. Funding, dynamic spread, order-book
+impact, liquidation and partial fills are not yet modeled. This engine is research-only
+and is not connected to live order execution.
