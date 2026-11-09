@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import numpy as np
 import pandas as pd
+from crypto_quant.feature_library import add_advanced_features
 
 BASE = "https://fapi.binance.com"
 INTERVALS = {"1m":60000,"3m":180000,"5m":300000,"15m":900000,"30m":1800000,
@@ -81,7 +82,8 @@ def add_features(frame):
         d[f"prior_high_{n}"]=h.shift(1).rolling(n).max()
         d[f"prior_low_{n}"]=l.shift(1).rolling(n).min()
     d["return_4"]=c.pct_change(4); d["range_atr"]=(h-l)/d.atr
-    return d.replace([np.inf,-np.inf],np.nan)
+    d=d.replace([np.inf,-np.inf],np.nan)
+    return add_advanced_features(d)
 
 def build_signal(d,p):
     c=d.close; fast=d[f"ema_{p.fast}"]; slow=d[f"ema_{p.slow}"]
@@ -102,6 +104,48 @@ def build_signal(d,p):
         body=(d.close-d.open).abs()
         long=(d.close>d.open)&(body/d.atr>.8)&(d.range_atr>1.2)&up&liquid
         short=(d.close<d.open)&(body/d.atr>.8)&(d.range_atr>1.2)&down&liquid
+    elif p.family=="macd_cross":
+        long=(d.macd>d.macd_signal)&(d.macd.shift(1)<=d.macd_signal.shift(1))&up&strong
+        short=(d.macd<d.macd_signal)&(d.macd.shift(1)>=d.macd_signal.shift(1))&down&strong
+    elif p.family=="stochastic_reversal":
+        long=(d.stoch_k>d.stoch_d)&(d.stoch_k.shift(1)<=d.stoch_d.shift(1))&(d.stoch_k<35)&(d.rsi>p.rsi_long)&up
+        short=(d.stoch_k<d.stoch_d)&(d.stoch_k.shift(1)>=d.stoch_d.shift(1))&(d.stoch_k>65)&(d.rsi<p.rsi_short)&down
+    elif p.family=="bollinger_reversion":
+        long=(d.bb_pct<.15)&(d.bb_pct.shift(1)>=.15)&(d.rsi<40)&(d.close>d.ema_55)
+        short=(d.bb_pct>.85)&(d.bb_pct.shift(1)<=.85)&(d.rsi>60)&(d.close<d.ema_55)
+    elif p.family=="bollinger_breakout":
+        long=(d.close>d.bb_upper)&(d.bb_width>d.bb_width.rolling(20).median())&up&liquid
+        short=(d.close<d.bb_lower)&(d.bb_width>d.bb_width.rolling(20).median())&down&liquid
+    elif p.family=="donchian_breakout":
+        long=(d.close>d[f"donchian_high_{p.lookback}"])&up&liquid
+        short=(d.close<d[f"donchian_low_{p.lookback}"])&down&liquid
+    elif p.family=="vwap_reclaim":
+        long=(d.close>d.vwap_24)&(d.close.shift(1)<=d.vwap_24.shift(1))&up&(d.obv_slope>0)
+        short=(d.close<d.vwap_24)&(d.close.shift(1)>=d.vwap_24.shift(1))&down&(d.obv_slope<0)
+    elif p.family=="ichimoku_trend":
+        cloud_top=d[["ichimoku_span_a","ichimoku_span_b"]].max(axis=1)
+        cloud_bottom=d[["ichimoku_span_a","ichimoku_span_b"]].min(axis=1)
+        long=(d.close>cloud_top)&(d.ichimoku_tenkan>d.ichimoku_kijun)&(d.close>d.ichimoku_kijun)&liquid
+        short=(d.close<cloud_bottom)&(d.ichimoku_tenkan<d.ichimoku_kijun)&(d.close<d.ichimoku_kijun)&liquid
+    elif p.family=="supertrend_follow":
+        long=(d.supertrend_direction>0)&(d.supertrend_direction.shift(1)<0)&(d.close>d.ema_55)
+        short=(d.supertrend_direction<0)&(d.supertrend_direction.shift(1)>0)&(d.close<d.ema_55)
+    elif p.family=="cci_reversal":
+        long=(d.cci.shift(1)<-100)&(d.cci>=-100)&(d.close>d.ema_55)
+        short=(d.cci.shift(1)>100)&(d.cci<=100)&(d.close<d.ema_55)
+    elif p.family=="mfi_flow":
+        long=(d.mfi>50)&(d.mfi.shift(1)<=50)&(d.cmf>0)&up
+        short=(d.mfi<50)&(d.mfi.shift(1)>=50)&(d.cmf<0)&down
+    elif p.family=="psar_trend":
+        long=(d.close>d.psar)&(d.close.shift(1)<=d.psar.shift(1))&up
+        short=(d.close<d.psar)&(d.close.shift(1)>=d.psar.shift(1))&down
+    elif p.family=="hma_momentum":
+        hma=d[f"hma_{p.fast}"]
+        long=(hma>hma.shift(1))&(d.close>hma)&(d.roc_10>0)&(d.adx>=p.adx_min)
+        short=(hma<hma.shift(1))&(d.close<hma)&(d.roc_10<0)&(d.adx>=p.adx_min)
+    elif p.family=="candle_structure":
+        long=((d.bullish_engulfing>0)|(d.bullish_pinbar>0))&up&(d.close>d.vwap_24)&liquid
+        short=((d.bearish_engulfing>0)|(d.bearish_pinbar>0))&down&(d.close<d.vwap_24)&liquid
     else: raise ValueError(f"Unknown family: {p.family}")
     out=np.zeros(len(d),dtype=np.int8); out[np.asarray(long.fillna(False))]=1
     out[np.asarray(short.fillna(False))]=-1
@@ -148,7 +192,10 @@ def simulate(d,signal,p,*,start,end,fee_bps,slippage_bps):
     return trades
 
 def candidate_grid(max_candidates=300,seed=20261110):
-    families=("trend_pullback","breakout","mean_reversion","directional_momentum","range_expansion")
+    families=("trend_pullback","breakout","mean_reversion","directional_momentum","range_expansion",
+      "macd_cross","stochastic_reversal","bollinger_reversion","bollinger_breakout",
+      "donchian_breakout","vwap_reclaim","ichimoku_trend","supertrend_follow",
+      "cci_reversal","mfi_flow","psar_trend","hma_momentum","candle_structure")
     grid=list(product(families,(8,13,21,34),(55,89,144),(40,45,50),(50,55,60),
       (15,20,25),(.7,1.,1.2),(1.,1.5,2.),(3.,3.5,4.),(24,48,96),(20,50)))
     grid=[x for x in grid if x[1]<x[2]]
