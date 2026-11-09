@@ -29,6 +29,7 @@ def test_entry_is_next_open_and_stop_precedes_target():
     d=pd.DataFrame({"open":c,"high":c+.1,"low":c-.1,"close":c,"volume":np.full(205,1000.)},index=idx)
     d.loc[idx[201],["open","high","low","close"]]=[100,105,95,100]
     p=Strategy("breakout",13,55,45,55,0,0.,1.,3.,3,20)
+    frame["atr"]=1.0
     sig=np.zeros(205,dtype=np.int8); sig[200]=1
     trades=simulate(d,sig,p,start=0,end=205,fee_bps=0,slippage_bps=0)
     assert trades and trades[0]["entry_time"]==idx[201].isoformat()
