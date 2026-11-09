@@ -18,7 +18,7 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
         return s.rolling(n).apply(lambda x: float(np.dot(x,weights)/weights.sum()),raw=True)
     for n in (9,16,21,34):
         d[f"wma_{n}"]=wma(c,n)
-    for n in (16,21,34):
+    for n in (8,9,13,16,21,34):
         half=max(2,n//2); root=max(2,int(np.sqrt(n)))
         d[f"hma_{n}"]=wma(2*wma(c,half)-wma(c,n),root)
 
