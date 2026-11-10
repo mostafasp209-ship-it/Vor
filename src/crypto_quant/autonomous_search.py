@@ -23,6 +23,8 @@ FAMILIES = (
     "macd_cross","stochastic_reversal","bollinger_reversion","bollinger_breakout",
     "donchian_breakout","vwap_reclaim","ichimoku_trend","supertrend_follow",
     "cci_reversal","mfi_flow","psar_trend","hma_momentum","candle_structure",
+    "tsi_momentum","aroon_trend","kama_regime","squeeze_breakout",
+    "choppiness_trend","ultimate_oscillator","fisher_reversal","donchian_midline",
 )
 FAST=(8,13,21,34); SLOW=(55,89,144,200)
 RSI_LONG=(35,40,45,50,55); RSI_SHORT=(45,50,55,60,65)
@@ -36,12 +38,12 @@ def _strategy_key(p: Strategy) -> tuple:
     return tuple(asdict(p).values())
 
 
-def _mutate(parent: Strategy, rng: random.Random) -> Strategy:
+def _mutate(parent: Strategy, rng: random.Random, family_weights: list[float] | None = None) -> Strategy:
     values=asdict(parent)
     fields=list(values)
     changes=rng.sample(fields,k=rng.choice((1,1,2,2,3)))
     for field in changes:
-        if field=="family": values[field]=rng.choice(FAMILIES)
+        if field=="family": values[field]=rng.choices(FAMILIES,weights=family_weights,k=1)[0] if family_weights else rng.choice(FAMILIES)
         elif field=="fast": values[field]=rng.choice(FAST)
         elif field=="slow": values[field]=rng.choice(SLOW)
         elif field=="rsi_long": values[field]=rng.choice(RSI_LONG)
@@ -57,15 +59,27 @@ def _mutate(parent: Strategy, rng: random.Random) -> Strategy:
     return Strategy(**values)
 
 
-def _population(elites: list[dict[str,Any]], count: int, seed: int) -> list[Strategy]:
+def _population(elites: list[dict[str,Any]], count: int, seed: int,
+               family_stats: dict[str,Any] | None = None) -> list[Strategy]:
     rng=random.Random(seed)
+    stats=family_stats or {}
+    # Exploration weight favors under-tested families; exploitation rewards
+    # families with better-than-random historical qualification rates.
+    weights=[]
+    for family in FAMILIES:
+        stat=stats.get(family,{})
+        tested=int(stat.get("tested",0)); qualified=int(stat.get("qualified",0))
+        exploration=1/math.sqrt(tested+1)
+        success=(qualified+1)/(tested+2)
+        weights.append((.35+success)*(.5+exploration))
     fresh=candidate_grid(max_candidates=count,seed=seed)
-    pool=list(fresh[:max(1,count//3)])
+    pool=[replace(p,family=rng.choices(FAMILIES,weights=weights,k=1)[0])
+          for p in fresh[:max(1,count//3)]]
     elite_objects=[Strategy(**x["strategy"]) for x in elites[:30]]
     if elite_objects:
         while len(pool)<count:
             parent=rng.choice(elite_objects)
-            pool.append(_mutate(parent,rng))
+            pool.append(_mutate(parent,rng,weights))
     seen=set(); unique=[]
     for p in pool:
         key=_strategy_key(p)
@@ -173,7 +187,7 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
     started=time.monotonic(); generation_results=[]
     while time.monotonic()-started < max_hours*3600:
         gen=int(state["generation"])+1; gen_seed=int(state["seed"])+gen*7919
-        population=_population(state.get("elites",[]),candidates_per_generation,gen_seed)
+        population=_population(state.get("elites",[]),candidates_per_generation,gen_seed,state.get("family_stats",{}))
         evaluated=[]
         for idx,p in enumerate(population,1):
             result=_evaluate(p,datasets,fee_bps=fee_bps,slippage_bps=slippage_bps)
