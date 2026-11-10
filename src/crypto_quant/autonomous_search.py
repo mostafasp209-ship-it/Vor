@@ -177,6 +177,9 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
                "started_at_utc":datetime.now(timezone.utc).isoformat()}
     if state.get("status")=="FOUND":
         return state
+    # Persist a valid initial checkpoint before network/data loading so even an
+    # early download failure leaves a recoverable diagnostic artifact.
+    state_path.write_text(json.dumps(state,indent=2,allow_nan=False),encoding="utf-8")
 
     datasets=[]
     cache_dir=out/"market_cache"
