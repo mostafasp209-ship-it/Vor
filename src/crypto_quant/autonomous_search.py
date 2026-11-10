@@ -154,7 +154,8 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
         state=json.loads(state_path.read_text(encoding="utf-8"))
     else:
         state={"status":"SEARCHING","generation":0,"seed":seed,"elites":[],
-               "best":None,"evaluated":0,"failure_counts":{},"started_at_utc":datetime.now(timezone.utc).isoformat()}
+               "best":None,"evaluated":0,"failure_counts":{},"family_stats":{},
+               "started_at_utc":datetime.now(timezone.utc).isoformat()}
     if state.get("status")=="FOUND":
         return state
 
@@ -178,8 +179,15 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
               min_rr=min_realized_rr,min_positive_market_fraction=min_positive_market_fraction)
             row={"strategy":asdict(p),**result,"qualified":not reasons,"failure_reasons":reasons}
             evaluated.append(row); state["evaluated"]=int(state.get("evaluated",0))+1
+            family_stat=state.setdefault("family_stats",{}).setdefault(p.family,
+              {"tested":0,"qualified":0,"best_score":None,"failure_counts":{}})
+            family_stat["tested"]+=1
+            if not reasons: family_stat["qualified"]+=1
+            if family_stat["best_score"] is None or result["score"]>family_stat["best_score"]:
+                family_stat["best_score"]=result["score"]
             for reason in reasons:
                 state["failure_counts"][reason]=int(state["failure_counts"].get(reason,0))+1
+                family_stat["failure_counts"][reason]=int(family_stat["failure_counts"].get(reason,0))+1
             if not reasons:
                 state.update({"status":"FOUND","winner":row,"generation":gen,
                   "found_at_utc":datetime.now(timezone.utc).isoformat()})
@@ -203,6 +211,9 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
           "qualified":sum(x["qualified"] for x in evaluated),
           "best_score":best["score"] if best else None,
           "best_metrics":best["overall"] if best else None,
+          "top_candidates":[{"strategy":x["strategy"],"score":x["score"],
+             "metrics":x["overall"],"failure_reasons":x["failure_reasons"]}
+             for x in evaluated[:5]],
           "elapsed_seconds":round(time.monotonic()-started,1)}
         generation_results.append(gen_summary)
         with ledger_path.open("a",encoding="utf-8") as fp:
