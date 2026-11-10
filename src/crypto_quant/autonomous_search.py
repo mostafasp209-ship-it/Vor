@@ -146,6 +146,8 @@ def _failure_reasons(result: dict[str,Any], *, min_trades: int,
                      min_positive_market_fraction: float) -> list[str]:
     m=result["overall"]; reasons=[]
     if m["trades"]<min_trades: reasons.append("insufficient_trade_frequency")
+    if m.get("winning_trades",0)<10 or m.get("losing_trades",0)<10:
+        reasons.append("insufficient_winner_loser_sample")
     if any(x["trades"]<min_trades_per_market for x in result["markets"]):
         reasons.append("insufficient_market_coverage")
     if m["win_rate"]<min_win_rate: reasons.append("win_rate_below_target")
@@ -220,6 +222,13 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
             reasons=_failure_reasons(result,min_trades=min_trades,
               min_trades_per_market=min_trades_per_market,min_win_rate=min_win_rate,
               min_rr=min_realized_rr,min_positive_market_fraction=min_positive_market_fraction)
+            if not reasons:
+                stress=_evaluate(p,datasets,fee_bps=fee_bps*1.5,slippage_bps=slippage_bps*2.0)
+                result["cost_stress"]={"fee_bps":fee_bps*1.5,
+                  "slippage_bps":slippage_bps*2.0,"overall":stress["overall"],
+                  "positive_folds":stress["positive_folds"],"fold_count":stress["fold_count"]}
+                if stress["overall"]["expectancy_r"]<=0:
+                    reasons.append("cost_stress_failure")
             row={"strategy":asdict(p),**result,"qualified":not reasons,"failure_reasons":reasons}
             evaluated.append(row); state["evaluated"]=int(state.get("evaluated",0))+1
             family_stat=state.setdefault("family_stats",{}).setdefault(p.family,
