@@ -40,3 +40,24 @@ def test_search_respects_time_splits():
     assert sum(r["splits"].values())==r["candles"]
     assert r["test_shortlist"]<=5
     assert all(isinstance(x["qualifies"],bool) for x in r["results"])
+
+
+def test_time_exit_charges_entry_and_exit_costs():
+    idx=pd.date_range("2025-01-01",periods=205,freq="h",tz="UTC")
+    c=np.full(205,100.)
+    d=pd.DataFrame({"open":c,"high":c+.01,"low":c-.01,"close":c,
+                    "volume":np.full(205,1000.),"atr":np.full(205,1.)},index=idx)
+    p=Strategy("breakout",13,55,45,55,0,0.,1.,3.,2,20)
+    sig=np.zeros(205,dtype=np.int8); sig[200]=1
+    free=simulate(d,sig,p,start=0,end=205,fee_bps=0,slippage_bps=0)
+    charged=simulate(d,sig,p,start=0,end=205,fee_bps=5,slippage_bps=2)
+    assert free[0]["exit_reason"]=="time"
+    assert charged[0]["net_r"]<free[0]["net_r"]
+
+
+def test_advanced_indicators_are_present():
+    d=add_features(sample_market())
+    required={"macd","stoch_k","bb_upper","cci","williams_r","mfi","obv",
+              "cmf","vwap_24","donchian_high_50","keltner_upper",
+              "ichimoku_span_a","supertrend_direction","psar","hma_13"}
+    assert required.issubset(d.columns)
