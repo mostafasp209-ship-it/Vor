@@ -137,7 +137,7 @@ Install and run:
 
 ```bash
 pip install -e ".[dev]"
-python scripts/run_strategy_search.py --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT --intervals 15m,1h --days 365
+python scripts/run_strategy_search.py --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT --intervals 5m,15m,1h,4h --days 365
 ```
 
 The engine downloads public futures candles without an API key, forms signals at candle
@@ -176,7 +176,7 @@ The autonomous loop evaluates candidates on four chronological walk-forward wind
 keeps an elite population, mutates candidate parameters, explores new families,
 records why candidates fail, and saves a checkpoint/experiment ledger. The default
 hard gates are unchanged: net win rate >=70%, realized average win/loss >=3.0,
-positive expectancy, at least 80 trades across research folds, positive expectancy
+positive expectancy, at least 200 trades overall and 10 per market/timeframe, positive expectancy
 in at least 75% of folds and markets, and a 95% Wilson lower bound above 50%.
 It never silently relaxes these thresholds.
 
