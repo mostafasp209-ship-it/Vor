@@ -60,7 +60,7 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
     # Rolling VWAP avoids session/timezone assumptions and remains causal.
     d["vwap_24"]=(tp*v).rolling(24).sum()/v.rolling(24).sum().replace(0,np.nan)
     d["vwap_96"]=(tp*v).rolling(96).sum()/v.rolling(96).sum().replace(0,np.nan)
-    for n in (10,20,40,55):
+    for n in (10,20,40,50,55):
         d[f"donchian_high_{n}"]=h.shift(1).rolling(n).max()
         d[f"donchian_low_{n}"]=l.shift(1).rolling(n).min()
 
