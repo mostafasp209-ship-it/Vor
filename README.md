@@ -162,7 +162,10 @@ The feature library now adds SMA/WMA/HMA, MACD, Stochastic and Stoch RSI,
 Bollinger Bands, CCI, Williams %R, ROC, MFI, OBV, CMF, rolling VWAP,
 Donchian and Keltner channels, Ichimoku, Supertrend, Parabolic SAR,
 candle anatomy/pattern flags, and volatility/trend-regime descriptors.
-The strategy search also includes indicator families built from these features.
+The strategy search now includes 26 indicator-driven strategy families. Its evolutionary sampler
+weights under-tested families for exploration and historically better-performing families for exploitation,
+retains elite candidates, mutates parameters, and resumes interrupted generations from checkpoints.
+Candidates that pass the base gates must also retain positive expectancy at 1.5x fees and 2x slippage.
 All features use current/past candles only; entries remain next-candle-open.
 
 Start or resume the adaptive research loop locally:
