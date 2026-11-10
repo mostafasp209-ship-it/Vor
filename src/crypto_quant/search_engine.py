@@ -218,6 +218,30 @@ def build_signal(d,p):
     elif p.family=="candle_structure":
         long=((d.bullish_engulfing>0)|(d.bullish_pinbar>0))&up&(d.close>d.vwap_24)&liquid
         short=((d.bearish_engulfing>0)|(d.bearish_pinbar>0))&down&(d.close<d.vwap_24)&liquid
+    elif p.family=="tsi_momentum":
+        long=(d.tsi>d.tsi_signal)&(d.tsi.shift(1)<=d.tsi_signal.shift(1))&up&(d.adx>=p.adx_min)
+        short=(d.tsi<d.tsi_signal)&(d.tsi.shift(1)>=d.tsi_signal.shift(1))&down&(d.adx>=p.adx_min)
+    elif p.family=="aroon_trend":
+        long=(d.aroon_up>d.aroon_down)&(d.aroon_up.shift(1)<=d.aroon_down.shift(1))&up&liquid
+        short=(d.aroon_down>d.aroon_up)&(d.aroon_down.shift(1)<=d.aroon_up.shift(1))&down&liquid
+    elif p.family=="kama_regime":
+        long=(d.close>d.kama_10)&(d.kama_10>d.kama_10.shift(3))&(d.close>d.ema_55)&(d.adx>=p.adx_min)
+        short=(d.close<d.kama_10)&(d.kama_10<d.kama_10.shift(3))&(d.close<d.ema_55)&(d.adx>=p.adx_min)
+    elif p.family=="squeeze_breakout":
+        long=d.squeeze_release&(d.close>d.bb_upper)&up&liquid
+        short=d.squeeze_release&(d.close<d.bb_lower)&down&liquid
+    elif p.family=="choppiness_trend":
+        long=(d.choppiness_14<45)&(d.choppiness_14.shift(1)>=45)&up&(d.plus_di>d.minus_di)&liquid
+        short=(d.choppiness_14<45)&(d.choppiness_14.shift(1)>=45)&down&(d.minus_di>d.plus_di)&liquid
+    elif p.family=="ultimate_oscillator":
+        long=(d.ultimate_oscillator>50)&(d.ultimate_oscillator.shift(1)<=50)&up
+        short=(d.ultimate_oscillator<50)&(d.ultimate_oscillator.shift(1)>=50)&down
+    elif p.family=="fisher_reversal":
+        long=(d.fisher_transform>d.fisher_signal)&(d.fisher_transform.shift(1)<=d.fisher_signal.shift(1))&(d.fisher_transform<-1)&(d.close>d.ema_55)
+        short=(d.fisher_transform<d.fisher_signal)&(d.fisher_transform.shift(1)>=d.fisher_signal.shift(1))&(d.fisher_transform>1)&(d.close<d.ema_55)
+    elif p.family=="donchian_midline":
+        long=(d.close>d.donchian_mid_20)&(d.close.shift(1)<=d.donchian_mid_20.shift(1))&up&liquid
+        short=(d.close<d.donchian_mid_20)&(d.close.shift(1)>=d.donchian_mid_20.shift(1))&down&liquid
     else: raise ValueError(f"Unknown family: {p.family}")
     out=np.zeros(len(d),dtype=np.int8); out[np.asarray(long.fillna(False))]=1
     out[np.asarray(short.fillna(False))]=-1
@@ -277,7 +301,9 @@ def candidate_grid(max_candidates=300,seed=20261110):
     families=("trend_pullback","breakout","mean_reversion","directional_momentum","range_expansion",
       "macd_cross","stochastic_reversal","bollinger_reversion","bollinger_breakout",
       "donchian_breakout","vwap_reclaim","ichimoku_trend","supertrend_follow",
-      "cci_reversal","mfi_flow","psar_trend","hma_momentum","candle_structure")
+      "cci_reversal","mfi_flow","psar_trend","hma_momentum","candle_structure",
+      "tsi_momentum","aroon_trend","kama_regime","squeeze_breakout",
+      "choppiness_trend","ultimate_oscillator","fisher_reversal","donchian_midline")
     fast_values=(8,13,21,34); slow_values=(55,89,144,200)
     rsi_long_values=(40,45,50); rsi_short_values=(50,55,60)
     adx_values=(0,15,20,25); volume_values=(0.0,.7,1.0,1.2)
