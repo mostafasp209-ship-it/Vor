@@ -118,6 +118,81 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
         psar[i]=candidate
     d["psar"]=psar
 
+    # Additional oscillators and adaptive trend tools.
+    change=c.diff()
+    abs_change=change.abs()
+    smooth=lambda x,n: x.ewm(span=n,adjust=False).mean()
+    double_num=smooth(smooth(change,25),13)
+    double_den=smooth(smooth(abs_change,25),13)
+    d["tsi"]=100*double_num/double_den.replace(0,np.nan)
+    d["tsi_signal"]=d.tsi.ewm(span=7,adjust=False).mean()
+
+    bp=c-np.minimum(l,c.shift(1))
+    tr_u=h.combine(c.shift(1),max)-l.combine(c.shift(1),min)
+    avg7=bp.rolling(7).sum()/tr_u.rolling(7).sum().replace(0,np.nan)
+    avg14=bp.rolling(14).sum()/tr_u.rolling(14).sum().replace(0,np.nan)
+    avg28=bp.rolling(28).sum()/tr_u.rolling(28).sum().replace(0,np.nan)
+    d["ultimate_oscillator"]=100*(4*avg7+2*avg14+avg28)/7
+
+    # Causal DPO variant: current close minus a lagged moving average.
+    d["dpo_20"]=c-c.rolling(20).mean().shift(11)
+    # Kaufman adaptive moving average.
+    er_num=(c-c.shift(10)).abs()
+    er_den=c.diff().abs().rolling(10).sum().replace(0,np.nan)
+    efficiency=(er_num/er_den).fillna(0).clip(0,1)
+    fast_sc=2/(2+1); slow_sc=2/(30+1)
+    smoothing=(efficiency*(fast_sc-slow_sc)+slow_sc)**2
+    kama=np.full(len(d),np.nan)
+    if len(d):
+        kama[0]=c.iloc[0]
+        cv=c.to_numpy(); sc=smoothing.to_numpy()
+        for i in range(1,len(d)):
+            kama[i]=kama[i-1]+(sc[i] if np.isfinite(sc[i]) else slow_sc**2)*(cv[i]-kama[i-1])
+    d["kama_10"]=kama
+
+    # Aroon uses rolling extrema age, not future-confirmed pivots.
+    def aroon_up(x):
+        return 100*(np.argmax(x)+1)/len(x)
+    def aroon_down(x):
+        return 100*(np.argmin(x)+1)/len(x)
+    d["aroon_up"]=h.rolling(25).apply(aroon_up,raw=True)
+    d["aroon_down"]=l.rolling(25).apply(aroon_down,raw=True)
+
+    # Choppiness and Bollinger/Keltner squeeze state.
+    sum_tr=d.atr.rolling(14).sum()
+    high14=h.rolling(14).max(); low14=l.rolling(14).min()
+    d["choppiness_14"]=100*np.log10(sum_tr/(high14-low14).replace(0,np.nan))/np.log10(14)
+    d["squeeze_on"]=(d.bb_upper<d.keltner_upper)&(d.bb_lower>d.keltner_lower)
+    d["squeeze_release"]=d.squeeze_on.shift(1).fillna(False)&(~d.squeeze_on)
+
+    # Fisher transform of normalized median price.
+    median=(h+l)/2
+    lo9=median.rolling(9).min(); hi9=median.rolling(9).max()
+    normalized=(2*(median-lo9)/(hi9-lo9).replace(0,np.nan)-1).clip(-.999,.999)
+    fisher=np.zeros(len(d),dtype=float)
+    nv=normalized.fillna(0).to_numpy()
+    for i in range(len(d)):
+        prev=fisher[i-1] if i else 0.
+        x=.33*nv[i]+.67*prev
+        fisher[i]=.5*np.log((1+x)/(1-x))+.5*prev
+    d["fisher_transform"]=fisher
+    d["fisher_signal"]=pd.Series(fisher,index=d.index).shift(1)
+
+    # Volume-weighted range and directional pressure proxies.
+    d["volume_price_trend"]=(c.pct_change().fillna(0)*v).cumsum()
+    d["volume_price_trend_slope"]=d.volume_price_trend.diff(10)
+    d["chaikin_oscillator"]=(
+        (((c-l)-(h-c))/(h-l).replace(0,np.nan)*v).fillna(0).cumsum().ewm(span=3,adjust=False).mean()
+        -(((c-l)-(h-c))/(h-l).replace(0,np.nan)*v).fillna(0).cumsum().ewm(span=10,adjust=False).mean()
+    )
+    d["donchian_mid_20"]=(d.donchian_high_20+d.donchian_low_20)/2
+    d["donchian_width_20"]=(d.donchian_high_20-d.donchian_low_20)/c
+    d["atr_percentile_100"]=d.atr_pct.rolling(100).rank(pct=True)
+
+    # Two-bar-confirmed swing levels: no centered rolling windows or future leakage.
+    d["confirmed_swing_high"]=h.shift(2).rolling(5).max()
+    d["confirmed_swing_low"]=l.shift(2).rolling(5).min()
+
     # Candle anatomy and simple, transparent pattern flags.
     body=(c-o).abs(); span=(h-l).replace(0,np.nan)
     upper_wick=h-np.maximum(o,c); lower_wick=np.minimum(o,c)-l
