@@ -1,6 +1,6 @@
 name: Persistent autonomous strategy research
 
-on:
+'on':
   workflow_dispatch:
     inputs:
       symbols:
