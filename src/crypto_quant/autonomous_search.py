@@ -15,7 +15,7 @@ import numpy as np
 
 from crypto_quant.search_engine import (
     Strategy, _metrics, add_features, build_signal, candidate_grid,
-    fetch_futures_ohlcv, simulate,
+    fetch_futures_ohlcv, simulate, validate_market_data,
 )
 
 FAMILIES = (
@@ -176,11 +176,22 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
         return state
 
     datasets=[]
+    cache_dir=out/"market_cache"
+    cache_dir.mkdir(parents=True,exist_ok=True)
     for symbol in symbols:
         for interval in intervals:
             key=f"{symbol.upper()}_{interval}"
-            print(f"Loading {key} {days}d Binance USD-M candles",flush=True)
-            raw=fetch_futures_ohlcv(symbol,interval,days)
+            cache_path=cache_dir/f"{key}_{days}d.csv.gz"
+            cache_fresh=cache_path.exists() and (time.time()-cache_path.stat().st_mtime)<20*3600
+            if cache_fresh:
+                print(f"Loading {key} from local research cache",flush=True)
+                raw=pd.read_csv(cache_path,compression="gzip",parse_dates=["open_time"],index_col="open_time")
+                raw.index=pd.to_datetime(raw.index,utc=True)
+                raw=validate_market_data(raw)
+            else:
+                print(f"Downloading {key} {days}d Binance USD-M archive candles",flush=True)
+                raw=fetch_futures_ohlcv(symbol,interval,days)
+                raw.rename_axis("open_time").to_csv(cache_path,compression="gzip")
             featured=add_features(raw)
             datasets.append({"key":key,"data":featured,"folds":_folds(len(featured))})
     if not datasets: raise ValueError("No datasets supplied")
