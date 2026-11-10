@@ -155,3 +155,39 @@ must show zero qualified strategies rather than silently weakening the gates.
 Reports are written to `artifacts/strategy_search/`. Funding, dynamic spread, order-book
 impact, liquidation and partial fills are not yet modeled. This engine is research-only
 and is not connected to live order execution.
+
+## Expanded indicators and autonomous strategy research
+
+The feature library now adds SMA/WMA/HMA, MACD, Stochastic and Stoch RSI,
+Bollinger Bands, CCI, Williams %R, ROC, MFI, OBV, CMF, rolling VWAP,
+Donchian and Keltner channels, Ichimoku, Supertrend, Parabolic SAR,
+candle anatomy/pattern flags, and volatility/trend-regime descriptors.
+The strategy search also includes indicator families built from these features.
+All features use current/past candles only; entries remain next-candle-open.
+
+Start or resume the adaptive research loop locally:
+
+```bash
+python -m pip install -e ".[dev]"
+python scripts/run_autonomous_search.py --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT --intervals 15m,1h --days 365
+```
+
+The autonomous loop evaluates candidates on four chronological walk-forward windows,
+keeps an elite population, mutates candidate parameters, explores new families,
+records why candidates fail, and saves a checkpoint/experiment ledger. The default
+hard gates are unchanged: net win rate >=70%, realized average win/loss >=3.0,
+positive expectancy, at least 80 trades across research folds, positive expectancy
+in at least 75% of folds and markets, and a 95% Wilson lower bound above 50%.
+It never silently relaxes these thresholds.
+
+GitHub Actions runs up to 5.2 hours per invocation and is scheduled every six hours.
+It restores the previous checkpoint and resumes; it stops early only after a candidate
+passes all configured historical gates. If none passes, it saves progress for the next
+scheduled run. GitHub Actions quotas, outages, disabled workflows, API limits, or an
+empty feasible strategy space can still interrupt or prevent discovery; this is not an
+infinite-process guarantee.
+
+A pass means historical walk-forward evidence only. It is not proof of future returns
+and is not authorization for live trading. The next required gate is paper-forward
+validation on unseen candles, with funding, spread, slippage, market impact, liquidation,
+and order execution modeled. The system does not place live orders.
