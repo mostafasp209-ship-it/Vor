@@ -1,0 +1,65 @@
+name: Persistent autonomous strategy research
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Comma-separated Binance USD-M symbols"
+        required: false
+        default: "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT"
+      intervals:
+        description: "Comma-separated candle intervals"
+        required: false
+        default: "15m,1h"
+      days:
+        description: "Historical lookback in days"
+        required: false
+        default: "365"
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vor-persistent-autonomous-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Restore autonomous research checkpoint
+        uses: actions/cache@v4
+        with:
+          path: .research_state/
+          key: vor-autonomous-v1-${{ github.run_id }}
+          restore-keys: |
+            vor-autonomous-v1-
+      - name: Install research package
+        run: python -m pip install -e ".[dev]"
+      - name: Resume adaptive strategy search
+        run: >
+          python scripts/run_autonomous_search.py
+          --symbols "${{ inputs.symbols || 'BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT' }}"
+          --intervals "${{ inputs.intervals || '15m,1h' }}"
+          --days "${{ inputs.days || '365' }}"
+          --candidates-per-generation 250
+          --min-trades 80
+          --min-win-rate 70
+          --min-realized-rr 3
+          --max-hours 5.2
+          --output .research_state
+      - name: Publish research checkpoint and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vor-autonomous-research-${{ github.run_id }}
+          path: .research_state/
+          if-no-files-found: error
+          retention-days: 30
