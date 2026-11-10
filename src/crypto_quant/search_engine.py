@@ -165,12 +165,19 @@ def _metrics(trades):
       "max_drawdown_r":round(float(dd.max()),2) if len(dd) else 0.}
 
 def simulate(d,signal,p,*,start,end,fee_bps,slippage_bps):
-    trades=[]; i=max(start,200); cost=(fee_bps+slippage_bps)/10000
-    while i<end-1:
-        side=int(signal[i]); atr=float(d.atr.iloc[i]) if pd.notna(d.atr.iloc[i]) else np.nan
-        if side==0 or not np.isfinite(atr) or atr<=0: i+=1; continue
+    """Next-open execution; skip flat bars efficiently; charge both sides on every exit."""
+    trades=[]; cost=(fee_bps+slippage_bps)/10000
+    first=max(start,200)
+    candidates=np.flatnonzero(np.asarray(signal[first:max(first,end-1)])!=0)+first
+    cursor=0
+    while cursor<len(candidates):
+        i=int(candidates[cursor]); side=int(signal[i])
+        atr=float(d.atr.iloc[i]) if pd.notna(d.atr.iloc[i]) else np.nan
+        if not np.isfinite(atr) or atr<=0:
+            cursor+=1; continue
         ei=i+1; raw=float(d.open.iloc[ei]); entry=raw*(1+cost*side); risk=atr*p.atr_stop
-        if risk/entry<.0003 or risk/entry>.04: i+=1; continue
+        if risk/entry<.0003 or risk/entry>.04:
+            cursor+=1; continue
         stop=entry-side*risk; target=entry+side*p.target_r*risk
         last=min(end-1,ei+p.max_hold-1); exit_price=float(d.close.iloc[last]); reason="time"; xi=last
         for j in range(ei,last+1):
@@ -183,12 +190,14 @@ def simulate(d,signal,p,*,start,end,fee_bps,slippage_bps):
             if target_hit:
                 raw_exit=max(op,target) if side>0 else min(op,target)
                 exit_price=raw_exit*(1-cost*side); reason="target"; xi=j; break
+        if reason=="time":
+            exit_price=exit_price*(1-cost*side)
         net_r=side*(exit_price-entry)/risk
         trades.append({"signal_time":d.index[i].isoformat(),"entry_time":d.index[ei].isoformat(),
           "exit_time":d.index[xi].isoformat(),"side":"LONG" if side>0 else "SHORT",
           "entry":entry,"exit":exit_price,"stop":stop,"target":target,
           "exit_reason":reason,"net_r":float(net_r)})
-        i=xi+1
+        cursor=int(np.searchsorted(candidates,xi+1,side="left"))
     return trades
 
 def candidate_grid(max_candidates=300,seed=20261110):
