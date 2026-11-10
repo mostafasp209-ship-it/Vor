@@ -192,16 +192,32 @@ def simulate(d,signal,p,*,start,end,fee_bps,slippage_bps):
     return trades
 
 def candidate_grid(max_candidates=300,seed=20261110):
+    """Sample unique candidates without materializing a multi-million-row Cartesian product."""
     families=("trend_pullback","breakout","mean_reversion","directional_momentum","range_expansion",
       "macd_cross","stochastic_reversal","bollinger_reversion","bollinger_breakout",
       "donchian_breakout","vwap_reclaim","ichimoku_trend","supertrend_follow",
       "cci_reversal","mfi_flow","psar_trend","hma_momentum","candle_structure")
-    grid=list(product(families,(8,13,21,34),(55,89,144),(40,45,50),(50,55,60),
-      (15,20,25),(.7,1.,1.2),(1.,1.5,2.),(3.,3.5,4.),(24,48,96),(20,50)))
-    grid=[x for x in grid if x[1]<x[2]]
-    rng=np.random.default_rng(seed); count=min(max_candidates,len(grid))
-    ids=rng.choice(len(grid),size=count,replace=False)
-    return [Strategy(*grid[int(i)]) for i in sorted(ids)]
+    fast_values=(8,13,21,34); slow_values=(55,89,144,200)
+    rsi_long_values=(40,45,50); rsi_short_values=(50,55,60)
+    adx_values=(0,15,20,25); volume_values=(0.0,.7,1.0,1.2)
+    stop_values=(1.0,1.5,2.0); target_values=(3.0,3.5,4.0,4.5)
+    hold_values=(24,48,96); lookback_values=(20,50)
+    rng=np.random.default_rng(seed); results=[]; seen=set()
+    max_attempts=max_candidates*30
+    for _ in range(max_attempts):
+        fast=int(rng.choice(fast_values)); slow=int(rng.choice([x for x in slow_values if x>fast]))
+        p=Strategy(str(rng.choice(families)),fast,slow,
+          int(rng.choice(rsi_long_values)),int(rng.choice(rsi_short_values)),
+          int(rng.choice(adx_values)),float(rng.choice(volume_values)),
+          float(rng.choice(stop_values)),float(rng.choice(target_values)),
+          int(rng.choice(hold_values)),int(rng.choice(lookback_values)))
+        key=tuple(asdict(p).values())
+        if key not in seen:
+            seen.add(key); results.append(p)
+            if len(results)>=max_candidates: break
+    if len(results)<max_candidates:
+        raise RuntimeError(f"Only generated {len(results)} unique candidates; requested {max_candidates}")
+    return results
 
 def _score(train,val):
     if not train["trades"] or not val["trades"]: return -1e9
