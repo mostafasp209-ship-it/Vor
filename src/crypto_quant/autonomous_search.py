@@ -275,6 +275,33 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
                 print(f"generation {gen}: {idx}/{len(population)} candidates",flush=True)
             if time.monotonic()-started >= max_hours*3600:
                 break
+        # A run may hit its time budget in the middle of a generation.
+        # Never mark that generation complete or discard its remaining candidates.
+        if state.get("status") != "FOUND" and len(evaluated) < len(population):
+            state["in_progress_evaluated"] = evaluated
+            if evaluated:
+                partial_best = max(
+                    evaluated,
+                    key=lambda x:(x["qualified"],x["score"],x["overall"]["expectancy_r"])
+                )
+                current_best = state.get("best")
+                if current_best is None or (
+                    partial_best["qualified"], partial_best["score"],
+                    partial_best["overall"]["expectancy_r"]
+                ) > (
+                    current_best.get("qualified", False), current_best["score"],
+                    current_best["overall"]["expectancy_r"]
+                ):
+                    state["best"] = partial_best
+            state["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+            state_path.write_text(json.dumps(state,indent=2,allow_nan=False),encoding="utf-8")
+            print(
+                f"Generation {gen} paused at {len(evaluated)}/{len(population)}; "
+                "checkpoint retained for exact resume.",
+                flush=True
+            )
+            break
+
         evaluated.sort(key=lambda x:(x["qualified"],x["score"],x["overall"]["expectancy_r"]),reverse=True)
         combined=(state.get("elites",[])+evaluated)
         combined.sort(key=lambda x:(x.get("qualified",False),x["score"],x["overall"]["expectancy_r"]),reverse=True)
