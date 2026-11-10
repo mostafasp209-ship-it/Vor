@@ -10,7 +10,7 @@ name: Persistent autonomous strategy research
       intervals:
         description: "Comma-separated candle intervals"
         required: false
-        default: "15m,1h"
+        default: "5m,15m,1h,4h"
       days:
         description: "Historical lookback in days"
         required: false
@@ -48,10 +48,11 @@ jobs:
         run: >
           python scripts/run_autonomous_search.py
           --symbols "${{ inputs.symbols || 'BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT' }}"
-          --intervals "${{ inputs.intervals || '15m,1h' }}"
+          --intervals "${{ inputs.intervals || '5m,15m,1h,4h' }}"
           --days "${{ inputs.days || '365' }}"
           --candidates-per-generation 250
-          --min-trades 80
+          --min-trades 200
+          --min-trades-per-market 10
           --min-win-rate 70
           --min-realized-rr 3
           --max-hours 5.2
