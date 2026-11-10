@@ -94,3 +94,17 @@ def test_evolutionary_search_uses_family_history():
     assert len(a)==len(b)==120
     assert a!=b
     assert all(x.family in FAMILIES for x in b)
+
+
+def test_evolutionary_mutation_responds_to_failure_reasons():
+    import random
+    from crypto_quant.autonomous_search import _mutate
+    p=Strategy("trend_pullback",13,55,45,55,15,.7,1.5,3.,48,20)
+    win_rate=_mutate(p,random.Random(11),failure_reasons=["win_rate_below_target"])
+    payoff=_mutate(p,random.Random(11),failure_reasons=["realized_rr_below_target"])
+    sparse=_mutate(p,random.Random(11),failure_reasons=["insufficient_trade_frequency"])
+    unstable=_mutate(p,random.Random(11),failure_reasons=["walk_forward_instability"])
+    assert win_rate.adx_min in (20,25,30) and win_rate.volume_min in (.9,1.0,1.2,1.5)
+    assert payoff.target_r>=4.0 and payoff.atr_stop<=1.2
+    assert sparse.max_hold in (48,72,96,144)
+    assert unstable.fast in (21,34) and unstable.slow in (89,144,200)
