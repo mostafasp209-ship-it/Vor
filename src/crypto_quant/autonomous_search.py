@@ -39,7 +39,8 @@ def _strategy_key(p: Strategy) -> tuple:
     return tuple(asdict(p).values())
 
 
-def _mutate(parent: Strategy, rng: random.Random, family_weights: list[float] | None = None) -> Strategy:
+def _mutate(parent: Strategy, rng: random.Random, family_weights: list[float] | None = None,
+            failure_reasons: list[str] | None = None) -> Strategy:
     values=asdict(parent)
     fields=list(values)
     changes=rng.sample(fields,k=rng.choice((1,1,2,2,3)))
@@ -55,6 +56,24 @@ def _mutate(parent: Strategy, rng: random.Random, family_weights: list[float] | 
         elif field=="target_r": values[field]=rng.choice(TARGETS)
         elif field=="max_hold": values[field]=rng.choice(HOLDS)
         elif field=="lookback": values[field]=rng.choice(LOOKBACKS)
+    failures=set(failure_reasons or [])
+    # Direct mutations are biased by the observed failure modes.
+    if "win_rate_below_target" in failures or "weak_win_rate_confidence" in failures:
+        values["adx_min"]=rng.choice((20,25,30))
+        values["volume_min"]=rng.choice((.9,1.0,1.2,1.5))
+        values["rsi_long"]=rng.choice((40,45,50))
+        values["rsi_short"]=rng.choice((50,55,60))
+    if "realized_rr_below_target" in failures:
+        values["target_r"]=rng.choice((4.0,4.5,5.0))
+        values["atr_stop"]=rng.choice((.8,1.0,1.2))
+    if "insufficient_trade_frequency" in failures:
+        values["adx_min"]=rng.choice((0,12,15))
+        values["volume_min"]=rng.choice((0.0,.7,.9))
+        values["max_hold"]=rng.choice((48,72,96,144))
+    if "walk_forward_instability" in failures or "cross_market_instability" in failures:
+        values["fast"]=rng.choice((21,34))
+        values["slow"]=rng.choice((89,144,200))
+        values["adx_min"]=rng.choice((20,25,30))
     if values["fast"]>=values["slow"]:
         values["slow"]=next(x for x in SLOW if x>values["fast"])
     return Strategy(**values)
@@ -76,11 +95,12 @@ def _population(elites: list[dict[str,Any]], count: int, seed: int,
     fresh=candidate_grid(max_candidates=count,seed=seed)
     pool=[replace(p,family=rng.choices(FAMILIES,weights=weights,k=1)[0])
           for p in fresh[:max(1,count//3)]]
-    elite_objects=[Strategy(**x["strategy"]) for x in elites[:30]]
-    if elite_objects:
+    elite_rows=elites[:30]
+    if elite_rows:
         while len(pool)<count:
-            parent=rng.choice(elite_objects)
-            pool.append(_mutate(parent,rng,weights))
+            parent_row=rng.choice(elite_rows)
+            parent=Strategy(**parent_row["strategy"])
+            pool.append(_mutate(parent,rng,weights,parent_row.get("failure_reasons",[])))
     seen=set(); unique=[]
     for p in pool:
         key=_strategy_key(p)
