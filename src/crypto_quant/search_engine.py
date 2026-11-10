@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from itertools import product
-import json, math, time
+import json, math, time, io, zipfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -38,30 +38,102 @@ def validate_market_data(frame):
     if (d.low>d[["open","high","close"]].min(axis=1)).any(): raise ValueError("Low is inconsistent with OHLC")
     return d
 
-def fetch_futures_ohlcv(symbol,interval="15m",days=365,pause_seconds=.12):
+def _read_binance_archive(url):
+    """Read one official Binance USD-M futures kline ZIP; return None when absent."""
+    request=Request(url,headers={"User-Agent":"Vor-Strategy-Research/1.0"})
+    try:
+        with urlopen(request,timeout=60) as response:
+            payload=response.read()
+    except Exception as exc:
+        from urllib.error import HTTPError
+        if isinstance(exc,HTTPError) and exc.code==404:
+            return None
+        raise
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        csv_names=[name for name in archive.namelist() if name.lower().endswith(".csv")]
+        if not csv_names:
+            raise RuntimeError(f"Archive has no CSV: {url}")
+        raw=archive.read(csv_names[0])
+    names=["open_time","open","high","low","close","volume","close_time",
+           "quote_volume","trade_count","taker_buy_base","taker_buy_quote","ignore"]
+    data=pd.read_csv(io.BytesIO(raw))
+    normalized=[str(x).strip().lower() for x in data.columns]
+    if "open_time" not in normalized:
+        data=pd.read_csv(io.BytesIO(raw),header=None,names=names)
+    else:
+        data.columns=normalized
+    required=names[:6]
+    missing=set(required)-set(data.columns)
+    if missing:
+        raise RuntimeError(f"Archive missing columns {sorted(missing)}: {url}")
+    data["open_time"]=pd.to_numeric(data["open_time"],errors="coerce")
+    for col in ("open","high","low","close","volume"):
+        data[col]=pd.to_numeric(data[col],errors="coerce")
+    data=data.dropna(subset=["open_time","open","high","low","close","volume"])
+    data["open_time"]=pd.to_datetime(data["open_time"],unit="ms",utc=True)
+    return data.set_index("open_time")[["open","high","low","close","volume"]]
+
+
+def fetch_futures_ohlcv(symbol,interval="15m",days=365,pause_seconds=.05):
+    """Fetch USD-M candles from Binance's official daily/monthly public archive.
+
+    Static archive downloads are used instead of the live REST endpoint because
+    hosted CI runners may be geo-blocked by the exchange API.
+    """
     if interval not in INTERVALS: raise ValueError(f"Unsupported interval: {interval}")
     if days<30: raise ValueError("days must be at least 30")
-    end=int(datetime.now(timezone.utc).timestamp()*1000); start=end-days*86400000
-    cursor=start; rows=[]; step=INTERVALS[interval]
-    while cursor<end:
-        batch=_get("/fapi/v1/klines",{"symbol":symbol.upper(),"interval":interval,
-          "startTime":cursor,"endTime":end,"limit":1500})
-        if not isinstance(batch,list): raise RuntimeError(f"Unexpected Binance response: {batch}")
-        if not batch: break
-        rows.extend(batch); nxt=int(batch[-1][0])+step
-        if nxt<=cursor: raise RuntimeError("Kline pagination did not advance")
-        cursor=nxt
-        if len(batch)<1500: break
-        time.sleep(max(0,pause_seconds))
-    if not rows: raise RuntimeError(f"No futures candles for {symbol} {interval}")
-    names=["open_time","open","high","low","close","volume","close_time","quote_volume",
-           "trade_count","taker_buy_base","taker_buy_quote","ignore"]
-    d=pd.DataFrame(rows,columns=names).drop_duplicates("open_time").sort_values("open_time")
-    d["open_time"]=pd.to_datetime(d.open_time,unit="ms",utc=True)
-    for col in ("open","high","low","close","volume"): d[col]=pd.to_numeric(d[col],errors="raise")
-    d=d.set_index("open_time")[["open","high","low","close","volume"]]
-    if len(d) and d.index[-1]+pd.Timedelta(milliseconds=step)>pd.Timestamp.now(tz="UTC"): d=d.iloc[:-1]
-    return validate_market_data(d)
+    symbol=symbol.upper()
+    now=pd.Timestamp.now(tz="UTC")
+    start=now-pd.Timedelta(days=days)
+    complete_end=now.normalize()  # Daily archive is only expected through yesterday.
+    if complete_end<=start:
+        raise ValueError("No completed UTC day inside requested history")
+    first_period=start.to_period("M")
+    last_period=(complete_end-pd.Timedelta(nanoseconds=1)).to_period("M")
+    chunks=[]
+    period=first_period
+    while period<=last_period:
+        month_start=period.start_time.tz_localize("UTC")
+        month_end=(period+1).start_time.tz_localize("UTC")
+        is_current_archive_month=(period==last_period)
+        if not is_current_archive_month:
+            filename=f"{symbol}-{interval}-{period.year}-{period.month:02d}.zip"
+            url=(f"https://data.binance.vision/data/futures/um/monthly/klines/"
+                 f"{symbol}/{interval}/{filename}")
+            chunk=_read_binance_archive(url)
+            if chunk is not None:
+                chunks.append(chunk)
+            else:
+                # Newly completed months can take time to appear in monthly storage.
+                day=max(month_start,start.normalize())
+                while day<month_end and day<complete_end:
+                    date=day.strftime("%Y-%m-%d")
+                    daily=f"{symbol}-{interval}-{date}.zip"
+                    daily_url=(f"https://data.binance.vision/data/futures/um/daily/klines/"
+                               f"{symbol}/{interval}/{daily}")
+                    chunk=_read_binance_archive(daily_url)
+                    if chunk is not None: chunks.append(chunk)
+                    day+=pd.Timedelta(days=1)
+                    time.sleep(max(0.0,pause_seconds))
+        else:
+            day=max(month_start,start.normalize())
+            while day<month_end and day<complete_end:
+                date=day.strftime("%Y-%m-%d")
+                daily=f"{symbol}-{interval}-{date}.zip"
+                daily_url=(f"https://data.binance.vision/data/futures/um/daily/klines/"
+                           f"{symbol}/{interval}/{daily}")
+                chunk=_read_binance_archive(daily_url)
+                if chunk is not None: chunks.append(chunk)
+                day+=pd.Timedelta(days=1)
+                time.sleep(max(0.0,pause_seconds))
+        period+=1
+        time.sleep(max(0.0,pause_seconds))
+    if not chunks:
+        raise RuntimeError(f"No Binance USD-M archive candles returned for {symbol} {interval}")
+    data=pd.concat(chunks).sort_index()
+    data=data[~data.index.duplicated(keep="last")]
+    data=data.loc[(data.index>=start)&(data.index<complete_end)]
+    return validate_market_data(data)
 
 def add_features(frame):
     d=validate_market_data(frame); c,h,l,v=d.close,d.high,d.low,d.volume
