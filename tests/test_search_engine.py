@@ -61,3 +61,36 @@ def test_advanced_indicators_are_present():
               "cmf","vwap_24","donchian_high_50","keltner_upper",
               "ichimoku_span_a","supertrend_direction","psar","hma_13"}
     assert required.issubset(d.columns)
+
+
+def test_expanded_indicators_are_finite_and_causal_columns_exist():
+    d=add_features(sample_market(1800))
+    required={"tsi","tsi_signal","ultimate_oscillator","dpo_20","kama_10",
+              "aroon_up","aroon_down","choppiness_14","squeeze_on",
+              "fisher_transform","fisher_signal","chaikin_oscillator",
+              "donchian_mid_20","atr_percentile_100","confirmed_swing_high",
+              "confirmed_swing_low"}
+    assert required.issubset(d.columns)
+    assert np.isfinite(d["fisher_transform"].dropna()).all()
+    assert d["fisher_transform"].notna().sum()>100
+
+
+def test_all_strategy_families_build_valid_signals():
+    from crypto_quant.search_engine import candidate_grid
+    d=add_features(sample_market(1800))
+    for p in candidate_grid(500):
+        signal=build_signal(d,p)
+        assert len(signal)==len(d)
+        assert set(np.unique(signal)).issubset({-1,0,1})
+
+
+def test_evolutionary_search_uses_family_history():
+    from crypto_quant.autonomous_search import FAMILIES, _population
+    cold={family:{"tested":0,"qualified":0} for family in FAMILIES}
+    hot={family:{"tested":1000,"qualified":0} for family in FAMILIES}
+    hot["tsi_momentum"]={"tested":100,"qualified":70}
+    a=_population([],120,123,cold)
+    b=_population([],120,123,hot)
+    assert len(a)==len(b)==120
+    assert a!=b
+    assert all(x.family in FAMILIES for x in b)
