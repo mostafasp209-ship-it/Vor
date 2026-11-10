@@ -186,10 +186,24 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
     if not datasets: raise ValueError("No datasets supplied")
     started=time.monotonic(); generation_results=[]
     while time.monotonic()-started < max_hours*3600:
-        gen=int(state["generation"])+1; gen_seed=int(state["seed"])+gen*7919
-        population=_population(state.get("elites",[]),candidates_per_generation,gen_seed,state.get("family_stats",{}))
-        evaluated=[]
-        for idx,p in enumerate(population,1):
+        gen=int(state["generation"])+1
+        if state.get("in_progress_generation")==gen:
+            gen_seed=int(state["in_progress_seed"])
+            population=[Strategy(**x) for x in state["in_progress_population"]]
+            evaluated=list(state.get("in_progress_evaluated",[]))
+            first_index=len(evaluated)
+            print(f"Resuming generation {gen} at candidate {first_index+1}",flush=True)
+        else:
+            gen_seed=int(state["seed"])+gen*7919
+            population=_population(state.get("elites",[]),candidates_per_generation,
+                                   gen_seed,state.get("family_stats",{}))
+            evaluated=[]; first_index=0
+            state["in_progress_generation"]=gen
+            state["in_progress_seed"]=gen_seed
+            state["in_progress_population"]=[asdict(x) for x in population]
+            state["in_progress_evaluated"]=[]
+            state_path.write_text(json.dumps(state,indent=2,allow_nan=False),encoding="utf-8")
+        for idx,p in enumerate(population[first_index:],first_index+1):
             result=_evaluate(p,datasets,fee_bps=fee_bps,slippage_bps=slippage_bps)
             reasons=_failure_reasons(result,min_trades=min_trades,
               min_trades_per_market=min_trades_per_market,min_win_rate=min_win_rate,
@@ -205,6 +219,10 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
             for reason in reasons:
                 state["failure_counts"][reason]=int(state["failure_counts"].get(reason,0))+1
                 family_stat["failure_counts"][reason]=int(family_stat["failure_counts"].get(reason,0))+1
+            if idx%25==0 or not reasons or time.monotonic()-started>=max_hours*3600:
+                state["in_progress_evaluated"]=evaluated
+                state["updated_at_utc"]=datetime.now(timezone.utc).isoformat()
+                state_path.write_text(json.dumps(state,indent=2,allow_nan=False),encoding="utf-8")
             if not reasons:
                 state.update({"status":"FOUND","winner":row,"generation":gen,
                   "found_at_utc":datetime.now(timezone.utc).isoformat()})
@@ -224,6 +242,8 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
             if len(dedup)>=40: break
         state["elites"]=dedup
         state["generation"]=gen; state["seed"]=gen_seed
+        for key in ("in_progress_generation","in_progress_seed","in_progress_population","in_progress_evaluated"):
+            state.pop(key,None)
         best=dedup[0] if dedup else None
         if best: state["best"]=best
         gen_summary={"generation":gen,"candidates":len(evaluated),
