@@ -251,7 +251,8 @@ def _metrics(trades):
     r=np.asarray([x["net_r"] for x in trades],dtype=float); wins=r[r>0]; losses=r[r<0]
     gp=float(wins.sum()); gl=float(-losses.sum()); eq=np.cumsum(r)
     peak=np.maximum.accumulate(np.r_[0.,eq]); dd=peak[1:]-eq if len(eq) else np.array([])
-    return {"trades":int(len(r)),"win_rate":round(float((r>0).mean()*100),2) if len(r) else 0.,
+    return {"trades":int(len(r)),"winning_trades":int(len(wins)),"losing_trades":int(len(losses)),
+      "win_rate":round(float((r>0).mean()*100),2) if len(r) else 0.,
       "avg_win_r":round(float(wins.mean()),3) if len(wins) else 0.,
       "avg_loss_r":round(float(-losses.mean()),3) if len(losses) else 0.,
       "realized_rr":round(float(wins.mean()/-losses.mean()),3) if len(wins) and len(losses) else 0.,
