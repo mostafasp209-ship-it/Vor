@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from crypto_quant.search_engine import (
     Strategy, _metrics, add_features, build_signal, candidate_grid,
