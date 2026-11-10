@@ -63,6 +63,7 @@ jobs:
           --max-hours 5.2
           --output .research_state
       - name: Publish research checkpoint and report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vor-autonomous-research-${{ github.run_id }}
