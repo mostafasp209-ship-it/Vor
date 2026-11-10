@@ -1,6 +1,6 @@
 name: Manual futures strategy discovery
 
-on:
+'on':
   workflow_dispatch:
     inputs:
       symbols:
