@@ -39,9 +39,18 @@ the close of t. A signal at t is executed no earlier than the open of t+1.
 16. Parabolic SAR: test stop-and-reverse direction changes with trend alignment.
 17. HMA momentum: test slope and price alignment with a momentum confirmation.
 18. Candle structure: test engulfing/pin-bar anatomy only at a trend/VWAP location.
+19. TSI momentum: test double-smoothed momentum crosses with trend confirmation.
+20. Aroon trend: test changes in the age of rolling highs/lows.
+21. KAMA regime: test adaptive moving-average slope and price alignment.
+22. Squeeze breakout: test volatility compression followed by band expansion.
+23. Choppiness trend: test exits from sideways regimes with directional confirmation.
+24. Ultimate oscillator: test multi-horizon buying-pressure transitions.
+25. Fisher reversal: test bounded Fisher-transform turns near extremes.
+26. Donchian midline: test rolling range-midpoint reclaim/loss with trend alignment.
 
 The search must test Long and Short symmetrically, and report them separately before
-any combined portfolio conclusion. Do not assume one direction or asset behaves like
+any combined portfolio conclusion. A qualifying result must contain at least 10 winners
+and 10 losers; a nominally infinite payoff ratio from zero losing trades is not accepted. Do not assume one direction or asset behaves like
 another.
 
 ## 3. Mathematical acceptance
@@ -75,7 +84,11 @@ Each generation:
 - checkpoints the generation, elite population and failure counters for resumption.
 
 A candidate's score rewards the weakest fold's expectancy, trade count and profit factor,
-while penalizing drawdown. This is a search heuristic, not a probability of future profit.
+while penalizing drawdown. Families with better historical qualification rates receive
+more exploitation weight; under-tested families receive an exploration bonus. Candidate
+progress is checkpointed so an interrupted generation can resume without re-counting
+completed trials. Baseline winners must also retain positive expectancy under 1.5x fees
+and 2x slippage. This is a search heuristic, not a probability of future profit.
 
 ## 5. Research controls and known gaps
 
