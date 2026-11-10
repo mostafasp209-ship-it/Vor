@@ -135,5 +135,5 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
     d["atr_pct"]=d.atr/c
     d["volume_zscore"]=(v-v.rolling(50).mean())/v.rolling(50).std().replace(0,np.nan)
     d["trend_strength"]=(d.ema_21-d.ema_55).abs()/d.atr.replace(0,np.nan)
-    d["range_position_50"]=(c-d.donchian_low_50)/(d.donchian_high_50-d.donchian_low_50).replace(0,np.nan)
+    d["range_position_50"]=(c-d.prior_low_50)/(d.prior_high_50-d.prior_low_50).replace(0,np.nan)
     return d.replace([np.inf,-np.inf],np.nan)
