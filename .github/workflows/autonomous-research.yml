@@ -1,6 +1,11 @@
 name: Persistent autonomous strategy research
 
 'on':
+  push:
+    paths:
+      - 'src/crypto_quant/**'
+      - 'scripts/run_autonomous_search.py'
+      - '.github/workflows/autonomous-research.yml'
   workflow_dispatch:
     inputs:
       symbols:
