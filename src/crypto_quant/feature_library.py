@@ -190,7 +190,6 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
     d["donchian_mid_20"]=(d.donchian_high_20+d.donchian_low_20)/2
     d["donchian_width_20"]=(d.donchian_high_20-d.donchian_low_20)/c
-    d["atr_percentile_100"]=d.atr_pct.rolling(100).rank(pct=True)
 
     # Two-bar-confirmed swing levels: no centered rolling windows or future leakage.
     d["confirmed_swing_high"]=h.shift(2).rolling(5).max()
@@ -211,6 +210,7 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
     # Volatility and regime descriptors for regime-aware filters.
     d["realized_vol_20"]=c.pct_change().rolling(20).std()
     d["atr_pct"]=d.atr/c
+    d["atr_percentile_100"]=d.atr_pct.rolling(100).rank(pct=True)
     d["volume_zscore"]=(v-v.rolling(50).mean())/v.rolling(50).std().replace(0,np.nan)
     d["trend_strength"]=(d.ema_21-d.ema_55).abs()/d.atr.replace(0,np.nan)
     d["range_position_50"]=(c-d.prior_low_50)/(d.prior_high_50-d.prior_low_50).replace(0,np.nan)
