@@ -170,11 +170,14 @@ def add_advanced_features(frame: pd.DataFrame) -> pd.DataFrame:
     lo9=median.rolling(9).min(); hi9=median.rolling(9).max()
     normalized=(2*(median-lo9)/(hi9-lo9).replace(0,np.nan)-1).clip(-.999,.999)
     fisher=np.zeros(len(d),dtype=float)
+    fisher_value=np.zeros(len(d),dtype=float)
     nv=normalized.fillna(0).to_numpy()
     for i in range(len(d)):
-        prev=fisher[i-1] if i else 0.
-        x=.33*nv[i]+.67*prev
-        fisher[i]=.5*np.log((1+x)/(1-x))+.5*prev
+        prev_value=fisher_value[i-1] if i else 0.
+        prev_fisher=fisher[i-1] if i else 0.
+        x=float(np.clip(.33*nv[i]+.67*prev_value,-.999,.999))
+        fisher_value[i]=x
+        fisher[i]=.5*np.log((1+x)/(1-x))+.5*prev_fisher
     d["fisher_transform"]=fisher
     d["fisher_signal"]=pd.Series(fisher,index=d.index).shift(1)
 
