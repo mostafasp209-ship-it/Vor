@@ -127,10 +127,12 @@ def _evaluate(p: Strategy, datasets: list[dict[str,Any]], *, fee_bps: float,
 
 
 def _failure_reasons(result: dict[str,Any], *, min_trades: int,
-                     min_win_rate: float, min_rr: float,
+                     min_trades_per_market: int, min_win_rate: float, min_rr: float,
                      min_positive_market_fraction: float) -> list[str]:
     m=result["overall"]; reasons=[]
     if m["trades"]<min_trades: reasons.append("insufficient_trade_frequency")
+    if any(x["trades"]<min_trades_per_market for x in result["markets"]):
+        reasons.append("insufficient_market_coverage")
     if m["win_rate"]<min_win_rate: reasons.append("win_rate_below_target")
     if m["realized_rr"]<min_rr: reasons.append("realized_rr_below_target")
     if m["expectancy_r"]<=0: reasons.append("non_positive_expectancy")
@@ -143,8 +145,8 @@ def _failure_reasons(result: dict[str,Any], *, min_trades: int,
 
 
 def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
-                   candidates_per_generation: int=250, min_trades: int=80,
-                   min_win_rate: float=70., min_realized_rr: float=3.,
+                   candidates_per_generation: int=250, min_trades: int=200,
+                   min_trades_per_market: int=10, min_win_rate: float=70., min_realized_rr: float=3.,
                    min_positive_market_fraction: float=.75, fee_bps: float=5.,
                    slippage_bps: float=2., max_hours: float=5.2,
                    output_dir: str=".research_state", seed: int=20261110) -> dict[str,Any]:
@@ -175,7 +177,8 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
         evaluated=[]
         for idx,p in enumerate(population,1):
             result=_evaluate(p,datasets,fee_bps=fee_bps,slippage_bps=slippage_bps)
-            reasons=_failure_reasons(result,min_trades=min_trades,min_win_rate=min_win_rate,
+            reasons=_failure_reasons(result,min_trades=min_trades,
+              min_trades_per_market=min_trades_per_market,min_win_rate=min_win_rate,
               min_rr=min_realized_rr,min_positive_market_fraction=min_positive_market_fraction)
             row={"strategy":asdict(p),**result,"qualified":not reasons,"failure_reasons":reasons}
             evaluated.append(row); state["evaluated"]=int(state.get("evaluated",0))+1
@@ -194,6 +197,8 @@ def run_autonomous(symbols: list[str], intervals: list[str], days: int=365,
                 break
             if idx%50==0:
                 print(f"generation {gen}: {idx}/{len(population)} candidates",flush=True)
+            if time.monotonic()-started >= max_hours*3600:
+                break
         evaluated.sort(key=lambda x:(x["qualified"],x["score"],x["overall"]["expectancy_r"]),reverse=True)
         combined=(state.get("elites",[])+evaluated)
         combined.sort(key=lambda x:(x.get("qualified",False),x["score"],x["overall"]["expectancy_r"]),reverse=True)
